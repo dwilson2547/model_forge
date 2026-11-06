@@ -1,0 +1,12 @@
+# model artifacts never enter git
+registry/
+runs/
+*.gguf
+*.safetensors
+*.bin
+# python
+__pycache__/
+.venv/
+*.pyc
+# local scratch
+scratch/
