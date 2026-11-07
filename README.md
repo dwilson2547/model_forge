@@ -10,9 +10,10 @@ ranks the candidate models on the hardware they'll run on. Fire a job — *"shri
 ~9B"* — and get back a leaderboard: which surgery+quant configs survived, measured on quality,
 tok/s, RAM, and disk.
 
-**Status: design phase (2026-11-06).** Hardware not yet set up; no code yet. Full architecture,
-decisions, and provenance-marked plan: [`docs/design.md`](docs/design.md). Milestones and the
-bring-up checklist: [`TODO.md`](TODO.md).
+**Status: design phase (2026-11-06); M0 hardware bring-up done (2026-11-07).** The Ampere Altra is up:
+128× Neoverse-N1, 250 GiB RAM, llama.cpp `e95426f` built, baseline table measured — see
+[`docs/design.md`](docs/design.md) §0. Code milestones M1–M5 are next; current state in
+[`TODO.md`](TODO.md).
 
 ## Layout
 

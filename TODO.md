@@ -5,15 +5,19 @@ M1 can begin on the Ryzen desktop before hardware bring-up if desired (D4 defaul
 
 ## M0 — Altra bring-up baseline (fills the ⬜s in the design)
 
-- [ ] OS + storage layout decided; 128-core topology confirmed (cores, RAM, disk)
-- [ ] llama.cpp pinned ARM build (NEON/dotprod/i8mm), benchmarked
-- [ ] Baseline table: stock Qwen quants (4B / 9B / 27B-class if RAM allows) × Q4_K_M / Q8_0
-      → decode tok/s, prompt-processing tok/s, TTFT at 4k/32k, peak RSS at 8k/64k ctx
-- [ ] Peak-RSS measurements: surgery ops on a 27B checkpoint, llama-quantize
-- [ ] Disk budget: candidate grid sizes, retention policy for intermediates
+- [x] OS + storage layout decided; 128-core topology confirmed (Ubuntu 24.04.5, 128× Neoverse-N1 @ 3.0 GHz,
+      250 GiB RAM, 915 GB NVMe / 730 GB free, single NUMA node; SIMD: asimd/asimdhp/asimddp, no SVE/i8mm)
+- [x] llama.cpp pinned ARM build (`e95426f`, 0.9.0-dev, GNU 13.3 aarch64) at `~/llama.cpp`
+- [x] Baseline table: Qwen3.5-4B/9B + Qwen3.8-27B (GGUFs from `unsloth`, `~/m0/registry/`) — pp512/tg128,
+      thread scaling; results in `docs/design.md` §0
+- [ ] Peak-RSS measurements per model + surgery/quantize peaks (decode-thread sweep in flight, fix
+      the `< /dev/null` stdin gotcha is why the first run hung)
+- [ ] Decode-thread optima per model size (sweep t∈{8,12,16,24,32} with `-tb 96`)
 
 ## M1 — surgery loop (desktop, small models)
 
+- [ ] Evaluate Ampere Model Library `amperecomputingai/pytorch` image for the surgery stack
+      (NEON/ACL-accelerated torch on Altra; model zoo itself irrelevant) ⬜
 - [ ] `surgery/` package: drop_layers (uniform + ranked), slice_ffn, prune_heads; config fixup;
       per-layer streaming to bound peak RAM
 - [ ] HF → GGUF convert of a surgically-edited checkpoint (Qwen3-4B-scale first)

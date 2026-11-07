@@ -1,11 +1,42 @@
 # model-forge — design
 
-**Status:** design phase, 2026-11-06. No code yet — hardware bring-up first. Decisions D1–D4 below were
-made with Daniel before this doc was written; everything else is the architecture those decisions imply.
+**Status:** design phase, 2026-11-06; **M0 hardware bring-up done 2026-11-07** (baseline table below).
+Code beyond bring-up tooling: not started. Decisions D1–D4 below were made with Daniel before this doc
+was written; everything else is the architecture those decisions imply.
 
-**Provenance:** per workspace §10, every specific value below is either already measured (✅), or planned
-and unverified (⬜). Nothing about the Altra machine is measured yet — not even core count and RAM. The
-only verified facts are the playbook patterns borrowed from `gpu-scheduler` and `local-model-builder`.
+**Provenance:** per workspace §10, every specific value below is either measured (✅ table), or planned
+and unverified (⬜). All measurements below were taken on the Altra box itself, llama.cpp `e95426f`
+(0.9.0-dev), 128× Neoverse-N1 @ 3.0 GHz, 250 GiB RAM, Ubuntu 24.04.5, CPU governor `ondemand`.
+
+## 0. M0 baseline — measured 2026-11-07 ✅
+
+llama-bench, pp512 / tg128, 2 reps, best thread count per test. Best values in bold.
+
+| model | size | pp512 t/s (t96) | tg128 t/s (t32) | peak RSS |
+|---|---:|---:|---:|---:|
+| Qwen3.5-4B Q4_K_M | 2.54 GiB | 313 | **24.1** | ⬜ sweep |
+| Qwen3.5-4B Q8_0 | 4.16 GiB | 335 | 16.8 | ⬜ sweep |
+| Qwen3.5-9B Q4_K_M | 5.28 GiB | 221 | **14.7** | ⬜ sweep |
+| Qwen3.5-9B Q8_0 | 8.86 GiB | 305 | 9.7 | ⬜ sweep |
+| Qwen3.8-27B UD-Q4_K_M | 15.32 GiB | 61 | **4.9** | ⬜ sweep |
+| Qwen3.8-27B Q8_0 | 27.04 GiB | 101 | 3.1 | ⬜ sweep |
+
+Findings that shape the build:
+
+1. **Prompt processing scales to ~96 threads; decode is bandwidth-bound and collapses past ~64.**
+   tg on the 4B: 24.1 t/s at t32 → 2.0 t/s at t96 (12× collapse from per-token barrier overhead);
+   the 9B hits 1.7 t/s at t128. The bench harness must use split threads: `-tb ~96` for prompt
+   processing, `-t` in the 8–32 range for decode (sweep in flight will pin the per-size optima).
+   `llama-bench` cannot set `-t` and `-tb` separately — use `llama-cli`/`llama-server` for timing runs.
+2. **Decode t/s tracks model size inversely** exactly as designed: 27B Q4 at 4.9 vs 9B Q4 at 14.7.
+   A good 27B→9B slice is a direct ~3× decode speedup and a 15.3 → ~6 GB cut. The project premise
+   is confirmed numerically.
+3. **Eval cost model for the funnel:** at 4.9 t/s, a 256-token scored sample costs ~53 s on the
+   27B Q4. Stage-A smoke stays at PPL + ≤3 short tasks; a 40-candidate grid is hours, not days.
+4. Operational gotcha: `llama-cli` **hangs on open stdin** even with `--file`/`-p`; always invoke with
+   `< /dev/null` from scripts (cost the first sweep run a 20-minute hang diagnosis).
+5. Unpacked 27B Q8_0 (27 GiB) + working set still leaves ~200 GiB RAM — surgery on 27B checkpoints
+   in fp16/bf16 is comfortable within the streaming design (§4.3).
 
 ## 1. Purpose
 
@@ -35,7 +66,8 @@ cycles that would otherwise fight the cluster's single 3080.
 
 ## 3. Constraints
 
-- **No GPU.** Inference is llama.cpp (NEON/dotprod/i8mm). Decode is memory-bandwidth-bound, so model
+- **No GPU.** Inference is llama.cpp (NEON/dotprod/fp16 asimd kernels; the N1 has no SVE/i8mm —
+  measured: `asimd`, `asimdhp`, `asimddp` only). Decode is memory-bandwidth-bound, so model
   size drives tok/s more than core count; that is exactly why slicing + 4–5-bit quants are the point.
 - **RAM as the forge's ceiling.** Surgery on a 27B checkpoint in bf16 needs the model (~54 GB) plus
   working copies of the layer being rewritten; ops must stream layer-by-layer to keep peak well below
