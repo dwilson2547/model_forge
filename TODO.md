@@ -22,10 +22,13 @@ M1 can begin on the Ryzen desktop before hardware bring-up if desired (D4 defaul
 Loop validated end-to-end on Qwen3.5-4B; measured the first quality cliff: drop8 = PPL 40
 (4.3x base), +slice85 = PPL 311 — recovery (M4) and drop policy are the levers, not the loop.
 
-- [ ] Drop-policy gradient run: counts 2/4/6, no-adjacent-drops constraint, fuse_pairs on —
-      maps the PPL-vs-depth curve before recovery exists (⬜ next experiment)
+- [x] Drop-policy gradient run — done 2026-11-07, design §0b: depth-fragile hybrid, fusion
+      retired for qwen3_5, recovery critical path, 27B confirmed same hybrid arch
 - [ ] FFN importance scoring v2 (activation-aware, not norm-only); width cuts stay off the
       menu until it passes a re-test at 0.85–0.95
+- [ ] Layer scoring v2: spatial-spread constraint (picks band-cluster in the 12–28 region even
+      with min_gap=2) or activation-aware BlockInfluence; re-run the 2/4/6 gradient against
+      the per-layer scores now recorded in each run's results.json
 - [ ] (bookkeeping) AML pytorch images are torch 1.12.1 — dead end for Qwen3.x stack decisions;
       stock torch 2.x it is, per M1's forge_env (torch 2.15.0 works fine on the box)
 

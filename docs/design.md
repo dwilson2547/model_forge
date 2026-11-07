@@ -78,6 +78,43 @@ lands:
    smaller. Suspect the sliced `intermediate_size` (7834) fighting Q4_K_M block layout
    (SIMD lane/padding effects). Re-measure before drawing conclusions.
 
+## 0b. Drop-policy gradient — measured 2026-11-07 ✅ (recovery is critical path, not optional)
+
+Six more recipes through the loop: ranked drops with `min_gap: 2` (no adjacent layers) at
+counts 2/4/6, each with and without LaCo fusion. Same corpus, same pinned eval config.
+
+| candidate | params | dropped set | f16 PPL | Q4 PPL | Q4 gen t/s |
+|---|---:|---|---:|---:|---:|
+| base | 4.21 B | — | 9.33 | 9.56 | 22.9 |
+| drop2 | 0.946× | [24, 28] | 12.82 | 13.19 | 24.5 |
+| drop4 | 0.893× | [12, 24, 26, 28] | 16.23 | 16.69 | 25.8 |
+| drop6 | 0.839× | [12, 20, 22, 24, 26, 28] | 27.36 | 28.45 | 27.5 |
+| drop6-fused | 0.839× | +2 fused pairs | **39.09** | 40.86 | 27.6 |
+| (drop8, unspaced) | 0.785× | [12,14,20,22,24,25,26,28] | 40.41 | 42.52 | 29.4 |
+
+Findings:
+
+1. **`qwen3_5` hybrids are depth-fragile in a way dense models are not.** Two layers out of
+   36 (5% of params, +7% tok/s) cost +37% PPL; the damage compounds multiplicatively with
+   depth. The ShortGFT-style "redundant layers" free lunch does not exist here — the sparse
+   full-attention pattern (every 4th) means every linear layer carries irreplaceable state.
+2. **LaCo fusion is retired for this architecture.** On linear↔linear pairs it is actively
+   harmful (drop6: PPL 27 → 39 — averaging gated-delta-rule state matrices is wrong); on
+   full↔linear pairs it silently no-ops (shape/type guard). The `fuse_pairs` op stays in the
+   schema for dense-family models only.
+3. **Spacing helped but the scorer still band-clusters** — every pick lands in the 12–28
+   region, forming a destructive band even with min_gap=2. Next scoring iteration needs
+   spatial spread constraints or activation-aware BlockInfluence (recorded as M1 follow-up).
+4. **Quant noise stays small on sliced models** (Q4 over f16: +0.2–2.3 PPL throughout) —
+   surgery decisions can be made at Q4 speed, validated at f16, with no masking risk.
+5. **Strategic: Qwen3.8-27B is the same `qwen3_5` hybrid** (64 layers, same pattern, 24q/4kv
+   GQA — config verified from HF). Therefore the 27B→~9B goal is **not reachable by naive
+   slicing**: the viable routes are (a) recovery-in-the-loop surgery — M4 moves from
+   "polish" to critical path — at gentle depths (2–6 of 64), and (b) active-parameter
+   reduction that keeps the weights: franken-MoE / MoE-ify (M5), which needs no recovery
+   for the assemble step and directly buys CPU decode speed. Reslicing + recovery may
+   combine: drop a little, recover, then sparse-activate.
+
 ## 1. Purpose
 
 Turn the Ampere Altra box into a **model-making node**: fire a job like *"shrink Qwen3.8-27B to a ~9B
