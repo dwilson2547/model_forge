@@ -1,0 +1,9 @@
+# M1 validation: the untouched base, converted + quantized by our own pipeline.
+# The apples-to-apples reference: same convert/quantize path, same eval corpus.
+name: qwen35-4b-base
+base_dir: /home/daniel/m0/registry/Qwen3.5-4B
+out_dir: /home/daniel/m0/runs/qwen35-4b-base
+llamacpp_dir: /home/daniel/llama.cpp
+ops:
+  - op: quantize
+    quants: [Q4_K_M]

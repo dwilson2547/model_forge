@@ -1,0 +1,15 @@
+# M1 validation recipe B: depth + width surgery.
+# Same ranked 8-layer drop, plus FFN slice keeping the top-85% neurons by importance.
+name: qwen35-4b-drop8-slice85
+base_dir: /home/daniel/m0/registry/Qwen3.5-4B
+out_dir: /home/daniel/m0/runs/qwen35-4b-drop8-slice85
+llamacpp_dir: /home/daniel/llama.cpp
+calib_file: /home/daniel/m0/data/wiki.test.txt
+ops:
+  - op: drop_layers
+    count: 8
+    strategy: ranked
+  - op: slice_ffn
+    keep_frac: 0.85
+  - op: quantize
+    quants: [Q4_K_M]

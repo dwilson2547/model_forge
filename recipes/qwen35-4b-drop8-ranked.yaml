@@ -1,0 +1,14 @@
+# M1 validation recipe A: depth surgery only.
+# Qwen3.5-4B: 36 layers, hybrid linear/full attention (full every 4th, protected).
+# 32 droppable interior linear-attention layers; drop 8 by neighbor-similarity ranking.
+name: qwen35-4b-drop8-ranked
+base_dir: /home/daniel/m0/registry/Qwen3.5-4B
+out_dir: /home/daniel/m0/runs/qwen35-4b-drop8-ranked
+llamacpp_dir: /home/daniel/llama.cpp
+calib_file: /home/daniel/m0/data/wiki.test.txt
+ops:
+  - op: drop_layers
+    count: 8
+    strategy: ranked
+  - op: quantize
+    quants: [Q4_K_M]
