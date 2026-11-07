@@ -17,17 +17,17 @@ M1 can begin on the Ryzen desktop before hardware bring-up if desired (D4 defaul
       N1 — the whole tag line is AmpereOne/N2-class). Vanilla build stays the forge engine; revisit
       only if Ampere ships an Altra-compatible tag.
 
-## M1 — surgery loop (desktop, small models)
+## M1 — surgery loop ✅ done 2026-11-07 (see design §0a)
 
-- [ ] Ampere Model Library `pytorch` docker images are a dead end for the surgery stack: newest tag is
-      torch **1.12.1** — Qwen3.x-era architectures need torch 2.x. Fallbacks: stock aarch64 PyTorch 2.x
-      (surgery is streaming/memory-bound; acceptable), or Ampere's current AOP wheels from their OS
-      portal if installable without a login wall. Decide at M1.
-- [ ] `surgery/` package: drop_layers (uniform + ranked), slice_ffn, prune_heads; per-layer fixup;
-      per-layer streaming to bound peak RAM
-- [ ] HF → GGUF convert of a surgically-edited checkpoint (Qwen3-4B-scale first)
-- [ ] llama-quantize calls wired as pinned-subprocess step
-- [ ] One recipe end-to-end: Qwen3-4B → drop+slice → convert → quantize → PPL + tok/s
+Loop validated end-to-end on Qwen3.5-4B; measured the first quality cliff: drop8 = PPL 40
+(4.3x base), +slice85 = PPL 311 — recovery (M4) and drop policy are the levers, not the loop.
+
+- [ ] Drop-policy gradient run: counts 2/4/6, no-adjacent-drops constraint, fuse_pairs on —
+      maps the PPL-vs-depth curve before recovery exists (⬜ next experiment)
+- [ ] FFN importance scoring v2 (activation-aware, not norm-only); width cuts stay off the
+      menu until it passes a re-test at 0.85–0.95
+- [ ] (bookkeeping) AML pytorch images are torch 1.12.1 — dead end for Qwen3.x stack decisions;
+      stock torch 2.x it is, per M1's forge_env (torch 2.15.0 works fine on the box)
 
 ## M2 — benchmark suite
 
@@ -43,6 +43,10 @@ M1 can begin on the Ryzen desktop before hardware bring-up if desired (D4 defaul
 - [ ] `forge` CLI + worker, SQLite jobs table (gpu-scheduler shape), `runs/` artifacts + GC
 - [ ] Two-stage funnel: smoke (stage A) → full suite (top-K), PPL ceiling cut
 - [ ] Markdown leaderboard + Pareto report
+- [ ] Publish stage for survivors: `hf upload` (box is authenticated as `dwilson2547`) of the
+      edited HF dir + GGUFs, with an auto-generated model card carrying recipe provenance
+      (recipe YAML, results.json, surgery deltas, license of the base — Qwen3.5 is Apache-2.0,
+      verify per base before publishing; gated behind an explicit cli flag, never automatic)
 - [ ] First real run: 27B → ~9B
 
 ## M4 — recovery (Altra CPU)

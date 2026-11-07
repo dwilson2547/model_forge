@@ -9,7 +9,6 @@ and unverified (⬜). All measurements below were taken on the Altra box itself,
 (0.9.0-dev), 128× Neoverse-N1 @ 3.0 GHz, 250 GiB RAM, Ubuntu 24.04.5, CPU governor `ondemand`.
 
 ## 0. M0 baseline — measured 2026-11-07 ✅
-
 llama-bench, pp512 / tg128, 2 reps, best thread count per test. Best values in bold.
 
 | model | size | pp512 t/s (t96) | tg128 t/s (t32) | peak RSS |
@@ -47,6 +46,37 @@ Findings that shape the build:
    build is AmpereOne-class. Vanilla `e95426f` stays the engine (no measurable competition found).
    Gotcha for scripts: this 0.9.0-dev build prints llama-cli timings to stdout as
    `[ Prompt: X t/s | Generation: Y t/s ]`, not the classic `llama_print_timings` stderr lines.
+
+## 0a. M1 validation — measured 2026-11-07 ✅ (surgery loop proven; quality cliff measured)
+
+First recipes through the full `surgery/` pipeline on Qwen3.5-4B (36-layer hybrid: 28 linear-
+attention + 8 full, full every 4th, protected from drop). PPL on wikitext-2, 24 chunks; speed
+at the pinned `-t 32 -tb 96`.
+
+| candidate | params | f16 PPL | Q4_K_M PPL | Q4 gen t/s | Q4 pp t/s |
+|---|---:|---:|---:|---:|---:|
+| base (identity recipe) | 4.21 B | 9.33 | 9.56 | 22.9 | 290 |
+| drop8-ranked | 3.30 B (0.785×) | 40.4 | 42.5 | 29.4 | 359 |
+| drop8 + slice85 | 3.05 B (0.725×) | **310.8** | 343.9 | 25.6 | 361 |
+
+Engineering validated: discovery → ranking → surgery → save → convert → quantize → eval runs
+unattended per recipe; the speed model from §0 holds — dropping 21.5% of params bought +28%
+decode (22.9→29.4 t/s) at Q4_K_M. Quality, as §4.5 predicted, is where un-recovered surgery
+lands:
+
+1. **Depth:** dropping 8/36 layers costs PPL 9.3 → 40.4. The neighbor-cosine scorer dropped
+   `[12,14,20,22,24,25,26,28]` — **four consecutive layers (24–28)** whose hidden states look
+   locally skippable, but linear-attention layers carry recurrent state forward, and the scorer
+   is blind to that. Fix candidates: no-adjacent-drop constraint, smaller counts, LaCo fusion.
+2. **Width:** FFN slicing (top-85%, norm importance, zero recovery) is far more destructive
+   than its parameter share suggests: PPL 40 → 311. Norm-based neuron scoring alone does not
+   rank swiglu neurons meaningfully on this architecture. Width surgery without recovery is
+   off the menu until scoring improves or M4 exists.
+3. Funnel economics confirmed: PPL alone caught a 33× quality disaster in ~90 s of eval —
+   exactly what stage-A smoke is for.
+4. ⚠ unexplained: drop8+slice85 decodes *slower* than drop8 (25.6 vs 29.4) despite being
+   smaller. Suspect the sliced `intermediate_size` (7834) fighting Q4_K_M block layout
+   (SIMD lane/padding effects). Re-measure before drawing conclusions.
 
 ## 1. Purpose
 
