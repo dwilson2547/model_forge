@@ -14,12 +14,18 @@ llama-bench, pp512 / tg128, 2 reps, best thread count per test. Best values in b
 
 | model | size | pp512 t/s (t96) | tg128 t/s (t32) | peak RSS |
 |---|---:|---:|---:|---:|
-| Qwen3.5-4B Q4_K_M | 2.54 GiB | 313 | **24.1** | ⬜ sweep |
-| Qwen3.5-4B Q8_0 | 4.16 GiB | 335 | 16.8 | ⬜ sweep |
-| Qwen3.5-9B Q4_K_M | 5.28 GiB | 221 | **14.7** | ⬜ sweep |
-| Qwen3.5-9B Q8_0 | 8.86 GiB | 305 | 9.7 | ⬜ sweep |
-| Qwen3.8-27B UD-Q4_K_M | 15.32 GiB | 61 | **4.9** | ⬜ sweep |
-| Qwen3.8-27B Q8_0 | 27.04 GiB | 101 | 3.1 | ⬜ sweep |
+| Qwen3.5-4B Q4_K_M | 2.54 GiB | 313 | **24.1** | 14.0 GiB |
+| Qwen3.5-4B Q8_0 | 4.16 GiB | 335 | 16.8 | 17.4 GiB |
+| Qwen3.5-9B Q4_K_M | 5.28 GiB | 221 | **14.7** | 18.5 GiB |
+| Qwen3.5-9B Q8_0 | 8.86 GiB | 305 | 9.7 | 25.2 GiB |
+| Qwen3.8-27B UD-Q4_K_M | 15.32 GiB | 61 | **4.9** | 42.3 GiB |
+| Qwen3.8-27B Q8_0 | 27.04 GiB | 101 | 3.1 | 70.8 GiB |
+
+Peak RSS from `/usr/bin/time -v` around a load + 1200-token prompt (`-tb 96`) + short gen run;
+2–3× the GGUF file size (mmap'd weight pages + compute buffers), stable ±0.1% across `-t`.
+Benchmark config pinned by the decode-thread sweep (t∈{8,12,16,24,32} at `-tb 96`, llama-cli):
+*tg rises monotonically to t=32 and flattens* (4B Q4: 15.2→22.5; 9B Q4: 9.4→14.1; 27B Q4:
+3.0→4.8 t/s), while llama-bench shows t48 already regresses — **pin `-t 32 -tb 96` for eval runs.**
 
 Findings that shape the build:
 
@@ -37,6 +43,10 @@ Findings that shape the build:
    `< /dev/null` from scripts (cost the first sweep run a 20-minute hang diagnosis).
 5. Unpacked 27B Q8_0 (27 GiB) + working set still leaves ~200 GiB RAM — surgery on 27B checkpoints
    in fp16/bf16 is comfortable within the streaming design (§4.3).
+6. `amperecomputingai/llama.cpp` docker `latest` SIGILLs on the N1 during model load — the default
+   build is AmpereOne-class. Vanilla `e95426f` stays the engine (no measurable competition found).
+   Gotcha for scripts: this 0.9.0-dev build prints llama-cli timings to stdout as
+   `[ Prompt: X t/s | Generation: Y t/s ]`, not the classic `llama_print_timings` stderr lines.
 
 ## 1. Purpose
 

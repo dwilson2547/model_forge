@@ -10,15 +10,20 @@ M1 can begin on the Ryzen desktop before hardware bring-up if desired (D4 defaul
 - [x] llama.cpp pinned ARM build (`e95426f`, 0.9.0-dev, GNU 13.3 aarch64) at `~/llama.cpp`
 - [x] Baseline table: Qwen3.5-4B/9B + Qwen3.8-27B (GGUFs from `unsloth`, `~/m0/registry/`) — pp512/tg128,
       thread scaling; results in `docs/design.md` §0
-- [ ] Peak-RSS measurements per model + surgery/quantize peaks (decode-thread sweep in flight, fix
-      the `< /dev/null` stdin gotcha is why the first run hung)
-- [ ] Decode-thread optima per model size (sweep t∈{8,12,16,24,32} with `-tb 96`)
+- [x] Peak-RSS measurements per model (✅ in design §0; `/usr/bin/time -v` around a pp+gen run)
+- [x] Decode-thread optima per model size: **pin `-t 32 -tb 96`** (measured sweep; collapse past ~64 threads confirmed)
+- [x] A/B `amperecomputingai/llama.cpp` vs vanilla `e95426f`: **result — incompatible.** Their
+      plain `latest` (v8896/`905ccccf2`) SIGILLs on the N1 during model load (instructions beyond
+      N1 — the whole tag line is AmpereOne/N2-class). Vanilla build stays the forge engine; revisit
+      only if Ampere ships an Altra-compatible tag.
 
 ## M1 — surgery loop (desktop, small models)
 
-- [ ] Evaluate Ampere Model Library `amperecomputingai/pytorch` image for the surgery stack
-      (NEON/ACL-accelerated torch on Altra; model zoo itself irrelevant) ⬜
-- [ ] `surgery/` package: drop_layers (uniform + ranked), slice_ffn, prune_heads; config fixup;
+- [ ] Ampere Model Library `pytorch` docker images are a dead end for the surgery stack: newest tag is
+      torch **1.12.1** — Qwen3.x-era architectures need torch 2.x. Fallbacks: stock aarch64 PyTorch 2.x
+      (surgery is streaming/memory-bound; acceptable), or Ampere's current AOP wheels from their OS
+      portal if installable without a login wall. Decide at M1.
+- [ ] `surgery/` package: drop_layers (uniform + ranked), slice_ffn, prune_heads; per-layer fixup;
       per-layer streaming to bound peak RAM
 - [ ] HF → GGUF convert of a surgically-edited checkpoint (Qwen3-4B-scale first)
 - [ ] llama-quantize calls wired as pinned-subprocess step
