@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import sys
 import time
 from pathlib import Path
 
@@ -46,7 +47,8 @@ def run_recipe(recipe_path, eval_prompt=None, eval_ppl_file=None, ppl_chunks=24)
     print(f"[pipeline] surgery done: {n_params_after/1e9:.2f}B params "
           f"({report['param_delta']:.3f}x of base)", flush=True)
 
-    report = build(recipe, report, model, tok)
+    # The GGUF convert must run under this interpreter — the venv has torch; system python doesn't.
+    report = build(recipe, report, model, tok, python=sys.executable)
     del model
 
     qop = next((o for o in recipe.ops if isinstance(o, Quantize)), None)
