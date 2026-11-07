@@ -31,20 +31,43 @@ def _shrink_linear(lin, keep_rows=None, keep_cols=None):
 
 
 def _drop_indices(n_layers, types, op, scores=None):
-    """Which layer indices may be dropped, subject to pattern/edge protections."""
+    """Which layer indices may be dropped, subject to pattern/edge protections and min_gap."""
     protected = set(op.protected_types)
     interior = set(range(1, n_layers - 1))          # never drop the first or last layer
     droppable = [i for i in sorted(interior) if types[i] not in protected]
     if op.count > len(droppable):
         raise ValueError(f"cannot drop {op.count} layers: only {len(droppable)} are droppable")
 
+    def spaced_ok(picked, cand):
+        return all(abs(cand - j) >= op.min_gap for j in picked)
+
     if op.strategy == "uniform":
         step = len(droppable) / op.count
-        return sorted(droppable[min(int(k * step), len(droppable) - 1)] for k in range(op.count))
+        picked = []
+        for k in range(op.count):
+            i = droppable[min(int(k * step), len(droppable) - 1)]
+            if spaced_ok(picked, i):
+                picked.append(i)
+        if len(picked) != op.count:
+            raise ValueError(
+                f"uniform drop of {op.count} layers with min_gap={op.min_gap} did not fit"
+            )
+        return sorted(picked)
     if op.strategy == "ranked":
         if scores is None:
             raise ValueError("ranked drop requires calibration scores")
-        return sorted(sorted(droppable, key=lambda i: scores[i], reverse=True)[: op.count])
+        picked = []
+        for i in sorted(droppable, key=lambda x: scores[x], reverse=True):
+            if len(picked) == op.count:
+                break
+            if spaced_ok(picked, i):
+                picked.append(i)
+        if len(picked) != op.count:
+            raise ValueError(
+                f"ranked drop of {op.count} layers with min_gap={op.min_gap} found only "
+                f"{len(picked)} spaced candidates"
+            )
+        return sorted(picked)
     raise ValueError(f"unknown drop strategy {op.strategy!r}")
 
 

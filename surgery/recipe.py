@@ -12,6 +12,9 @@ class DropLayers:
     strategy: str = "uniform"   # uniform | ranked (neighbor-similarity scores on calibration text)
     # Hybrid-attention safety: layers whose type appears in `protected_types` are never dropped.
     protected_types: tuple = ("full_attention",)
+    # Minimum index distance between any two dropped layers. 2 = no adjacent drops —
+    # mandatory guard for linear-attention stacks (recurrent state passes forward).
+    min_gap: int = 0
 
 
 @dataclass

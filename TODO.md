@@ -52,7 +52,12 @@ Loop validated end-to-end on Qwen3.5-4B; measured the first quality cliff: drop8
 ## M4 — recovery (Altra CPU)
 
 - [ ] llama.cpp LoRA fine-tune stage for a stage-A survivor; before/after scores through the funnel
-- [ ] Recovery dataset choice (~2B-token mix) ⬜
+- [ ] Recovery dataset choice ⬜ — Daniel is collecting HF dataset suggestions (from Gemma) for
+      repairing sliced models. Candidate families to evaluate (all ⬜ untested): SFT mixtures
+      (Tulu-3 SFT mix, smoltalk2, OpenHermes-2.5) for instruct-style LoRA, vs continued-pretraining
+      corpora (fineweb-edu) for raw-PPL repair. Cost matters: CPU LoRA is slow, so pick a
+      token-efficient set and validate the M4 stage itself on a 1–2B model first — don't sink a
+      weekend of box time into the 27B before the stage works on something cheap.
 
 ## M5 — MoE making
 

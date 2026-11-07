@@ -1,0 +1,15 @@
+# Drop-policy gradient: 2 ranked drops, min_gap 2 (no adjacent layers), fuse_pairs=false.
+name: qwen35-4b-drop2-ranked
+base_dir: /home/daniel/m0/registry/Qwen3.5-4B
+out_dir: /home/daniel/m0/runs/qwen35-4b-drop2-ranked
+llamacpp_dir: /home/daniel/llama.cpp
+calib_file: /home/daniel/m0/data/wiki.test.txt
+ops:
+  - op: drop_layers
+    count: 2
+    strategy: ranked
+    min_gap: 2
+  - op: fuse_pairs
+    enabled: false
+  - op: quantize
+    quants: [Q4_K_M]
