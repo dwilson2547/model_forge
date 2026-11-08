@@ -52,23 +52,26 @@ Loop validated end-to-end on Qwen3.5-4B; measured the first quality cliff: drop8
       verify per base before publishing; gated behind an explicit cli flag, never automatic)
 - [ ] First real run: 27B → ~9B
 
-## M4 — recovery (Altra CPU)
+## M4 — recovery
 
-**Engine pivoted 2026-11-07**: llama.cpp finetune is GPU-only right now (CPU backend misses
-backward kernels, plus qwen3_5's SIGMOID backward is unimplemented) — see
-`docs/issues/2026_11_07_llamacpp_cpu_finetune.md`. Recovery runs via torch-CPU
-(`surgery/recover.py`, peft LoRA on transformers reference impls) on the same box.
+**Measured verdict 2026-11-07:** recovery cannot run on the Altra. llama.cpp finetune is
+blocked upstream (CPU backward kernels missing + qwen3_5 SIGMOID backward missing), and
+torch-CPU measures **~2 tok/s** (bf16 pathology found and fixed to fp32; the reference
+linear-attention ops are per-op bound — 10M repair tokens = 60+ days). The recovery stage
+becomes a **GPU worker** job: desktop 5080 first, cluster 3080 as alternative. The Altra
+keeps surgery + build + eval. Issue docs: `2026_11_07_llamacpp_cpu_finetune.md`,
+`2026_11_07_torch_bf16_matmul_slow.md`.
 
-- [x] llama.cpp recovery attempt — blocked upstream, documented, pivoted (issue doc above)
-- [ ] Torch-recovery probe on the drop2 wound: tok/s throughput, loss trajectory, merged
-      GGUF into the standard eval path (*in flight 2026-11-07*)
-- [ ] Scale decision: from probe throughput, extrapolate the corpus size a real repair run
-      needs and check it against overnight box-time budgets
-- [ ] Recovery dataset choice ⬜ — Daniel is collecting HF dataset suggestions (from Gemma) for
-      repairing sliced models. Candidate families to evaluate (all ⬜ untested): SFT mixtures
-      (Tulu-3 SFT mix, smoltalk2, OpenHermes-2.5) for instruct-style LoRA, vs continued-pretraining
-      corpora (fineweb-edu) for raw-PPL repair. Cost matters: validate the stage on the smallest
-      wound first — don't sink a weekend of box time into the 27B before the stage works on the 4B.
+- [x] llama.cpp recovery attempt — blocked upstream, documented, pivoted
+- [x] torch-CPU recovery probe — works correctly but ~2 tok/s ceiling; ruled out on
+      throughput (probe artifacts in ~/m0; recover-results superseded)
+- [ ] GPU recovery worker: `surgery/recover.py` adapted for CUDA (unsloth/bnb QLoRA on the
+      5080; 4B-9B candidates fit easily; 27B needs QLoRA + reasonable ctx) — needs the
+      desktop reachable over ssh or a queue handoff through gpu-scheduler ⬜ design TBD
+- [ ] Recovery dataset choice ⬜ — Daniel is collecting HF dataset suggestions (from Gemma)
+      for repairing sliced models. Candidate families (all ⬜ untested): SFT mixtures
+      (Tulu-3 SFT mix, smoltalk2, OpenHermes-2.5) vs continued-pretraining (fineweb-edu).
+      On GPU the token budget is 1000× cheaper, so both families can be A/B'd directly.
 
 ## M5 — MoE making
 

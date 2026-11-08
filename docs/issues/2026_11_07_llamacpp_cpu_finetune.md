@@ -32,12 +32,18 @@ cannot load the models we need to repair.
 ## Resolution / workaround
 
 **Recovery engine pivot:** M4 recovery moves from llama.cpp CPU finetune to
-**PyTorch-CPU training via transformers' reference implementations** (full autograd, incl. the
-linear-attention layers — no flash-linear-attention kernels needed; the reference path trains
-correctly, just slowly). The edited checkpoints are already saved HF dirs, so this needs no new
-plumbing upstream of training. Design D1 is amended: *recovery on the Altra via torch-CPU*,
-not llama.cpp. Revisit llama.cpp finetune if/when upstream lands CPU backward kernels and
-qwen3_5 backward ops.
+**PyTorch-CPU training via transformers' reference implementations**.
 
-**Status:** llama.cpp GGUF-side recovery abandoned for this milestone (2026-11-07); torch probe
-tasked as the replacement (`surgery/recover.py`).
+**Follow-up, same day — measured, and it kills the workaround too:** torch-CPU training on
+this model/arch runs at **~2 tok/s** at the box's best (fp32 after the bf16 pathology was
+found and fixed — see `2026_11_07_torch_bf16_matmul_slow.md`; thread/batch sweeps could not
+move the needle: the reference `chunk_gated_delta_rule`/`causal_conv1d` implementations are
+thousands of tiny sequential ops per chunk, and no CPU thread config fixes per-op overhead).
+At 2 tok/s a modest 10M-token repair corpus is **60+ days** of exclusive box time. CPU
+recovery — llama.cpp or torch — is quantitatively ruled out on this hardware, not just
+broken: the recovery stage needs the desktop 5080 (or cluster 3080) as the training worker,
+with the Altra remaining the surgery + eval engine. See design D1 (amended twice) and
+TODO M4.
+
+**Status:** llama.cpp GGUF-side recovery abandoned (2026-11-07); torch-CPU recovery
+measured infeasible at 2 tok/s (2026-11-07); recovery stage points at a GPU worker.

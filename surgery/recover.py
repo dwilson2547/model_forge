@@ -3,7 +3,12 @@
 Pivot engine (see docs/issues/2026_11_07_llamacpp_cpu_finetune.md): llama.cpp finetune
 cannot train on CPU-only builds, and qwen3_5 hybrids cannot build a backward graph at
 all. transformers' reference implementations have full autograd, so recovery runs
-here in bf16 on the 128 N1 cores.
+here on the 128 N1 cores.
+
+Dtype is fp32, NOT bf16: torch-on-aarch64 has a pathological bf16 matmul fallback
+(>1000x slower; see docs/issues/2026_11_07_torch_bf16_matmul_slow.md). fp32 matmul
+measures ~1.4 TFLOP/s on this box, and the extra RAM (4B fp32 = 16 GiB + activations)
+is well within budget.
 
 This is a *probe*, not the final stage: it measures training throughput (tok/s) and
 loss trajectory on a small corpus, and emits a merged HF dir + GGUF for the standard
@@ -20,7 +25,7 @@ import torch
 
 def load_for_training(hf_dir):
     import transformers
-    model = transformers.AutoModelForCausalLM.from_pretrained(hf_dir, dtype=torch.bfloat16)
+    model = transformers.AutoModelForCausalLM.from_pretrained(hf_dir, dtype=torch.float32)
     model.config.use_cache = False
     model.gradient_checkpointing_disable()   # false-by-default; LoRA probe wants speed
     model.train()
@@ -39,7 +44,7 @@ def main():
     ap.add_argument("--batch", type=int, default=2)
     ap.add_argument("--lora-r", type=int, default=16)
     ap.add_argument("--lr", type=float, default=1e-4)
-    ap.add_argument("--threads", type=int, default=0)
+    ap.add_argument("--threads", type=int, default=96)
     args = ap.parse_args()
 
     if args.threads:
