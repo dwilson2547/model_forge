@@ -19,6 +19,23 @@ from pathlib import Path
 import torch
 
 
+def _merge_to_hf(hf_dir, adapter_dir, out_dir):
+    """Exact merge, off the 4-bit weights: bf16 CPU base + PeftModel + merge_and_unload."""
+    import json
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from peft import PeftModel
+    base = AutoModelForCausalLM.from_pretrained(hf_dir, dtype=torch.bfloat16)
+    base = PeftModel.from_pretrained(base, adapter_dir, adapter_name="repair")
+    merged = base.merge_and_unload()
+    hf_out = Path(out_dir) / "hf-recovered"
+    merged.save_pretrained(hf_out, safe_serialization=True)
+    AutoTokenizer.from_pretrained(hf_dir).save_pretrained(hf_out)
+    report = {"hf_dir": str(hf_dir), "adapter": str(adapter_dir), "hf_recovered": str(hf_out)}
+    (Path(out_dir) / "recover-results.json").write_text(json.dumps(report, indent=2))
+    print(f"[recover-gpu] merged -> {hf_out}", flush=True)
+    return hf_out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("hf_dir", help="edited HF checkpoint to repair")
@@ -39,22 +56,7 @@ def main():
     args = ap.parse_args()
 
     if args.merge_only:
-        # Cannot cast/merge on the 4-bit bnb model; the exact path is a bf16 CPU base
-        # with the trained adapter merged in. ~10 GiB RAM, no GPU.
-        import json as _json  # noqa: F401  (top-level import exists)
-        from transformers import AutoModelForCausalLM as _AFC, AutoTokenizer as _AT
-        from peft import PeftModel
-        base = _AFC.from_pretrained(args.hf_dir, dtype=torch.bfloat16)
-        base = PeftModel.from_pretrained(base, args.merge_only, adapter_name="repair")
-        merged = base.merge_and_unload()
-        out = Path(args.out)
-        hf_out = out / "hf-recovered"
-        merged.save_pretrained(hf_out, safe_serialization=True)
-        _AT.from_pretrained(args.hf_dir).save_pretrained(hf_out)
-        report = {"hf_dir": str(args.hf_dir), "adapter": str(args.merge_only),
-                  "hf_recovered": str(hf_out)}
-        (out / "recover-results.json").write_text(json.dumps(report, indent=2))
-        print(f"[recover-gpu] merged -> {hf_out}", flush=True)
+        _merge_to_hf(args.hf_dir, args.merge_only, args.out)
         return
 
     from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -137,25 +139,25 @@ def main():
             model.save_pretrained(out / "ckpt" / f"step{step+1}")
             print(f"[recover-gpu] checkpoint saved: step {step+1}", flush=True)
 
-    if args.save_every and not args.calibrate:
-        model.save_pretrained(out / "ckpt" / "final")
-
     if args.calibrate:
         rate = tokens_seen / (time.time() - t0)
         print(f"CALIBRATION: {rate:.0f} tok/s (batch {args.batch}, ctx {args.ctx}, QLoRA r{args.lora_r})", flush=True)
         return
 
-    wall = time.time() - t0
-    print("[recover-gpu] merging adapter (fp32 on CPU)…", flush=True)
-    merged = model.merge_and_unload()
-    merged = merged.to(torch.float32)
-    hf_out = out / "hf-recovered"
-    merged.save_pretrained(hf_out, safe_serialization=True)
-    tok.save_pretrained(hf_out)
+    if args.save_every and not args.calibrate:
+        model.save_pretrained(out / "ckpt" / "final")
+        # in-place merge on the 4-bit bnb model is both lossy and un-castable; the
+        # exact path reloads a bf16 CPU base with the saved adapter.
+        adapter_dir = out / "ckpt" / "final" / "repair"
+        model = None  # free GPU + grads before the RAM-heavy merge
+        import gc; gc.collect()
+        _merge_to_hf(args.hf_dir, str(adapter_dir), str(out))
+        hf_out = out / "hf-recovered"
+        wall = time.time() - t0
 
-    report = {
-        "hf_dir": str(args.hf_dir), "corpus": str(args.corpus),
-        "params": {"epochs": args.epochs, "ctx": args.ctx, "batch": args.batch,
+        report = {
+            "hf_dir": str(args.hf_dir), "corpus": str(args.corpus),
+            "params": {"epochs": args.epochs, "ctx": args.ctx, "batch": args.batch,
                    "lora_r": args.lora_r, "lr": args.lr},
         "loss_first": losses[0], "loss_last20_avg": sum(losses[-20:]) / min(20, len(losses)),
         "tokens_seen": tokens_seen, "train_tok_per_s": tokens_seen / wall,

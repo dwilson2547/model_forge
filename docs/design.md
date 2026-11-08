@@ -145,6 +145,37 @@ Findings:
 4. Desktop impact: training holds ~4 GiB VRAM of 16 and leaves the machine usable throughout —
    the D1 concern about desktop-hostage jobs only applies to the 27B-scale QLoRA (overnight class).
 
+## 0d. Repair-diet A/B, three-corpus floor — measured 2026-11-08 ✅
+
+Two repairs of the same drop2 wound with different diets (same recipe: QLoRA r16, 2 epochs,
+~4.8M tokens, ~2,200 tok/s), evaluated through the multi-corpus floor (`surgery/multicorpus.py`:
+wikitext-test, fineweb holdout disjoint from any repair data, code from llama.cpp sources; chunks 24).
+
+| Qwen3.5-4B (f16) | wikitext PPL | fineweb PPL | code PPL |
+|---|---:|---:|---:|
+| base (untouched) | 9.33 | 10.44 | 3.17 |
+| drop2, unrepaired | 12.82 | 13.55 | 3.57 |
+| drop2 + wikitext repair | **8.16** | **19.45** | **3.90** |
+| drop2 + fineweb repair | 10.22 | **12.47** | 3.58 |
+
+Findings:
+
+1. **Single-corpus PPL lies, proven.** The wikitext-repaired model *beats the base* on wikitext
+   (8.16 vs 9.33) while carrying an **86% fineweb regression** (19.45 vs 10.44) and 23% code
+   regression vs base. Viewed on its training domain it looks like a better model; off-domain
+   it is the worst model in the table. The three-corpus floor caught the domain-makeup trap
+   §0c flagged, for ~10 minutes of eval cost.
+2. **Diverse repair heals broadly.** fineweb-edu repair (never seeing wikitext) recovers
+   74% of the wikitext wound (12.82→10.22 vs base 9.33) and 35% of the fineweb wound, with
+   code unchanged. No domain was damaged — this is true healing, not specialization — but
+   restoration is partial at this dose (4.8M tokens, r16).
+3. **Code needs code.** Neither diet contained code; code PPL tracked the wound (3.57/3.58) —
+   repair diets sculpt what the model keeps. The recovery corpus is therefore a first-class
+   recipe parameter, and diet grids (fineweb / mixed-with-code / SFT-mixture) belong in the
+   forge search space next to the surgical ops.
+4. Numbers: all rows in `~/m0/runs/multicorpus-results.jsonl` on the box; adversarial-repeat
+   dedup applied once (a double-launched eval duplicated rows; values identical).
+
 ## 1. Purpose
 
 Turn the Ampere Altra box into a **model-making node**: fire a job like *"shrink Qwen3.8-27B to a ~9B
