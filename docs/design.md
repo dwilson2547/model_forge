@@ -115,6 +115,36 @@ Findings:
    for the assemble step and directly buys CPU decode speed. Reslicing + recovery may
    combine: drop a little, recover, then sparse-activate.
 
+## 0c. M4 first recovery cycle — measured 2026-11-08 ✅ (drop2 repaired on the desktop 5080)
+
+The full loop the project was designed around, first pass: Altra (slice) → desktop 5080 (repair)
+→ Altra (convert/quantize/eval). Repair: QLoRA r16 (7 projections, NF4, AdamW8bit, cosine),
+2 epochs / 2,444 steps / ~4.8M wikitext-train tokens at **2,270 tok/s measured, 3.9 GiB VRAM**
+(desktop stays usable; `surgery/recover_gpu.py`, grad-checkpointed, checkpoint/resume support).
+
+| Qwen3.5-4B | f16 PPL | Q4_K_M PPL | Q4 gen t/s | size |
+|---|---:|---:|---:|---:|
+| base (untouched) | 9.33 | 9.56 | 22.9 t/s | 2.54 GiB |
+| drop2, unrepaired | 12.82 | 13.19 | 24.5 t/s | ~2.4 GiB |
+| drop2 + GPU repair | **8.16** | **8.34** | 24.3 t/s | 2.38 GiB |
+
+Findings:
+
+1. **The wound closes.** Domain-matched repair took PPL from 12.82 to 8.16 — below even the
+   un-wounded base, i.e. domain adaptation + true repair. The drop2 candidate is now smaller,
+   faster, and (on the measured domain) *tighter* than the base it came from.
+2. **Caveat, stated plainly:** repair corpus (wikitext-train) is domain-matched to the eval
+   corpus (wikitext-test). The next repair experiment must use diverse data (Gemma's dataset
+   candidates: SFT mixtures vs fineweb-edu) and evaluate over multiple corpora before
+   claiming general repair — this cycle proves the mechanism and the throughput economics,
+   not generality.
+3. **Merge correctness note:** QLoRA adapters cannot merge in-place on the 4-bit weights —
+   the exact path is a bf16 CPU base + `PeftModel.from_pretrained` + `merge_and_unload()`
+   (`--merge-only` in recover_gpu.py). Round-trip noise vs fp32 merge is negligible for Q4_K_M
+   downstream.
+4. Desktop impact: training holds ~4 GiB VRAM of 16 and leaves the machine usable throughout —
+   the D1 concern about desktop-hostage jobs only applies to the 27B-scale QLoRA (overnight class).
+
 ## 1. Purpose
 
 Turn the Ampere Altra box into a **model-making node**: fire a job like *"shrink Qwen3.8-27B to a ~9B

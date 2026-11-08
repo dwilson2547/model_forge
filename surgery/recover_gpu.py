@@ -22,7 +22,7 @@ import torch
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("hf_dir", help="edited HF checkpoint to repair")
-    ap.add_argument("corpus", help="plain-text training file")
+    ap.add_argument("corpus", nargs="?", default=None, help="plain-text training file (not needed with --merge-only)")
     ap.add_argument("--out", default="runs/gpu-recovery")
     ap.add_argument("--epochs", type=float, default=2.0)
     ap.add_argument("--ctx", type=int, default=512)
@@ -35,7 +35,27 @@ def main():
     ap.add_argument("--max-chars", type=int, default=12_000_000)
     ap.add_argument("--calibrate", action="store_true",
                     help="measure throughput only: no checkpoints, no merge, no GGUF")
+    ap.add_argument("--merge-only", default="", help="skip training; merge this adapter dir into a bf16 CPU copy of the base and save")
     args = ap.parse_args()
+
+    if args.merge_only:
+        # Cannot cast/merge on the 4-bit bnb model; the exact path is a bf16 CPU base
+        # with the trained adapter merged in. ~10 GiB RAM, no GPU.
+        import json as _json  # noqa: F401  (top-level import exists)
+        from transformers import AutoModelForCausalLM as _AFC, AutoTokenizer as _AT
+        from peft import PeftModel
+        base = _AFC.from_pretrained(args.hf_dir, dtype=torch.bfloat16)
+        base = PeftModel.from_pretrained(base, args.merge_only, adapter_name="repair")
+        merged = base.merge_and_unload()
+        out = Path(args.out)
+        hf_out = out / "hf-recovered"
+        merged.save_pretrained(hf_out, safe_serialization=True)
+        _AT.from_pretrained(args.hf_dir).save_pretrained(hf_out)
+        report = {"hf_dir": str(args.hf_dir), "adapter": str(args.merge_only),
+                  "hf_recovered": str(hf_out)}
+        (out / "recover-results.json").write_text(json.dumps(report, indent=2))
+        print(f"[recover-gpu] merged -> {hf_out}", flush=True)
+        return
 
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from peft import LoraConfig, get_peft_model

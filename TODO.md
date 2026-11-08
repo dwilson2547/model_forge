@@ -65,9 +65,14 @@ keeps surgery + build + eval. Issue docs: `2026_11_07_llamacpp_cpu_finetune.md`,
 - [x] llama.cpp recovery attempt — blocked upstream, documented, pivoted
 - [x] torch-CPU recovery probe — works correctly but ~2 tok/s ceiling; ruled out on
       throughput (probe artifacts in ~/m0; recover-results superseded)
-- [ ] GPU recovery worker: `surgery/recover.py` adapted for CUDA (unsloth/bnb QLoRA on the
-      5080; 4B-9B candidates fit easily; 27B needs QLoRA + reasonable ctx) — needs the
-      desktop reachable over ssh or a queue handoff through gpu-scheduler ⬜ design TBD
+- [x] GPU recovery worker: `surgery/recover_gpu.py` — QLoRA trainer + merge + calibrate modes;
+      first full cycle done 2026-11-08 (design §0c): drop2 PPL 12.82 -> 8.16, 2270 tok/s at
+      3.9 GiB, desktop-usable. Checkpoint/resume wired for pausable runs.
+- [ ] Next repair experiment: diverse repair data (SFT mixture vs fineweb-edu — Gemma's
+      candidates) evaluated over *multiple* corpora to separate domain adaptation from true
+      repair (§0c caveat #2) ⬜
+- [ ] Wire GPU recovery into the pipeline proper: `forge submit` extension with a
+      `recovery worker: desktop-5080` stage that ssh-round-trips the candidate HF dir ⬜
 - [ ] Recovery dataset choice ⬜ — Daniel is collecting HF dataset suggestions (from Gemma)
       for repairing sliced models. Candidate families (all ⬜ untested): SFT mixtures
       (Tulu-3 SFT mix, smoltalk2, OpenHermes-2.5) vs continued-pretraining (fineweb-edu).
