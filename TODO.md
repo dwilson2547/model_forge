@@ -78,6 +78,18 @@ keeps surgery + build + eval. Issue docs: `2026_11_07_llamacpp_cpu_finetune.md`,
 - [ ] Next repair experiment: diverse repair data (SFT mixture vs fineweb-edu — Gemma's
       candidates) evaluated over *multiple* corpora to separate domain adaptation from true
       repair (§0c caveat #2) ⬜
+- [ ] ctx-1024 repair arm (same codefw diet, ctx 512→1024): hypothesis — linear-attention
+      state flow + full-attention long-range patterns are under-repaired at 512 (deployments
+      run 18k!). Validate with a long-window PPL column added to the floor (e.g. 8k-token
+      chunks) + loop-threshold temp at long ctx; VRAM est. ~6-8 GiB, tok/s est. ~0.6-0.75× ⬜
+- [ ] SFT mode in recover_gpu: chat-template application + completion-only loss masking
+      (raw-text trainer can't use instruction data) ⬜
+- [ ] Incumbent-domain SFT corpus (small, LoRA-sized): resolved incident-operator cases as
+      (incident bundle → known-good triage JSON) pairs, plus scraper postmortems + runbooks
+      from scrape-stack — targets the observed failure mode ("everything but the cloudflare
+      block wrong"). Train/eval split MANDATORY: incidents used in the benchmark corpus must
+      stay out of the training corpus. Public "AIOps triage" datasets: treat as ⚠ unverified
+      candidates only; the proprietary corpus is the real asset
 - [ ] Wire GPU recovery into the pipeline proper: `forge submit` extension with a
       `recovery worker: desktop-5080` stage that ssh-round-trips the candidate HF dir ⬜
 - [ ] Recovery dataset choice ⬜ — Daniel is collecting HF dataset suggestions (from Gemma)
