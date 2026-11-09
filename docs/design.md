@@ -243,6 +243,34 @@ Findings → priority changes (absorbed into TODO M4):
    deep-corpus chunks per cell, so corpus-tail variance is suspect — treat the 32k column
    as noisier until re-measured with more chunks.
 
+## 0f. Rank probe — measured 2026-11-09 ✅ (refutes the capacity-ceiling reading)
+
+Same wound (drop2), same diet (codefw, 12MB cap, 2 epochs, 3.2M tokens), same hyperparams,
+only LoRA rank varies. f16, 2k-window floor.
+
+| arm | wiki | fineweb | code | fineweb gap to base |
+|---|---:|---:|---:|---:|
+| r16 (§0d arm) | 9.97 | 12.34 | 3.28 | +1.90 |
+| r32 | 10.62 | 12.99 | 3.57 | +2.55 |
+| r64 | 11.48 | 13.73 | 3.67 | +3.29 |
+
+**Higher rank repairs worse at fixed small dose — capacity ceiling refuted.** With only
+3.2M training tokens, the bigger adapters (r64 = 80M params) are under-dosed: they memorize
+noise instead of re-learning structure, while small rank acts as implicit regularization
+that generalizes. (Also note α scaled with r, α/r held at 2.)
+
+Cross-referencing with §0d/§0e: the fineweb plateau (~+1.6–1.9 over base) is **flat against
+dose** (3.2M → 12.34, 9.5M → 12.39 at r16), **flat against window size** (§0e), and **grows
+with rank** — so it is not adapter capacity, not context-training, and not data volume.
+Remaining candidates: the 4-bit-quantized training substrate itself (QLoRA noise floor),
+the optimization regime (lr/schedule at fixed α/r — unswept), or genuinely irrecoverable
+weight damage that residual-rank updates cannot relearn. Full-weight repair would be the
+decisive escalation but does not fit any local GPU at this size (~27 GiB optimizer+grads
+for a 4B bf16; CPU is 2 tok/s) — marked out of reach for now.
+
+Priorities updated in TODO: invert the direction on the next knob — **probe rank DOWN (r8)**,
+sweep lr at r16, and treat the plateau as QLoRA-substrate-bound until either moves it.
+
 ## 1. Purpose
 
 Turn the Ampere Altra box into a **model-making node**: fire a job like *"shrink Qwen3.8-27B to a ~9B
