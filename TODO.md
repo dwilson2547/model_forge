@@ -56,7 +56,13 @@ Loop validated end-to-end on Qwen3.5-4B; measured the first quality cliff: drop8
 - [ ] Publish stage for survivors: `hf upload` (box is authenticated as `dwilson2547`) of the
       edited HF dir + GGUFs, with an auto-generated model card carrying recipe provenance
       (recipe YAML, results.json, surgery deltas, license of the base — Qwen3.5 is Apache-2.0,
-      verify per base before publishing; gated behind an explicit cli flag, never automatic)
+      verify per base before publishing; gated behind an explicit cli flag, never automatic).
+      **First survivor published 2026-11-09 (manual end-to-end, scripts under
+      `~/m0/publish/` on the box): `dwilson2547/Qwen3.5-4B-drop2-mixed-repair` (HF format, card +
+      recipe-yaml provenance) and `-GGUF` sibling (Q4_K_M with MTP graft). Checklist for the
+      stage code: license check, card generation, secrets/infra-path sanitization, corpus-flag
+      guard (local-only variants refuse), idempotent re-runs. Token on the box is now
+      write-scoped.**
 - [ ] First real run: 27B → ~9B
 
 ## M4 — recovery
