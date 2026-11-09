@@ -90,6 +90,15 @@ keeps surgery + build + eval. Issue docs: `2026_11_07_llamacpp_cpu_finetune.md`,
       block wrong"). Train/eval split MANDATORY: incidents used in the benchmark corpus must
       stay out of the training corpus. Public "AIOps triage" datasets: treat as ⚠ unverified
       candidates only; the proprietary corpus is the real asset
+- [ ] (stretch) Homelab-adaptation arm: raw-text diet from the workspace's own markdown —
+      runbooks, design docs, domain notes (ai-notes layer included), conventions, wiki.
+      No SFT mode needed (existing trainer works). Order of operations:
+      1) secrets scan over the corpus before it touches any trainer (gitleaks-class scan;
+         workspace grade depends on it)
+      2) exclude the benchmark-incident bundles + their postmortems (eval contamination)
+      3) publish policy: workspace-doc-trained variants are local-only — the M3 publish
+         stage must refuse variants whose training corpus flag isn't explicitly cleared
+         by name (infra detail leakage), even though HF auth exists
 - [ ] Wire GPU recovery into the pipeline proper: `forge submit` extension with a
       `recovery worker: desktop-5080` stage that ssh-round-trips the candidate HF dir ⬜
 - [ ] Recovery dataset choice ⬜ — Daniel is collecting HF dataset suggestions (from Gemma)
