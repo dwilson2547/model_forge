@@ -95,7 +95,12 @@ def main():
         print(f"[recover-gpu] resumed adapter from {args.resume}", flush=True)
     model.print_trainable_parameters()
 
-    text = Path(args.corpus).read_text()[: args.max_chars]
+    raw = Path(args.corpus).read_text()
+    if len(raw) > args.max_chars:
+        print(f"[recover-gpu] WARNING: corpus {len(raw):,} chars exceeds --max-chars "
+              f"{args.max_chars:,}; training on the first {args.max_chars:,} only. "
+              f"Raise --max-chars if this is unintended (it was, once: 2026-11-08).", flush=True)
+    text = raw[: args.max_chars]
     ids_all = tok(text, return_tensors="pt")["input_ids"][0]
     seq = (ids_all.shape[0] // args.ctx) * args.ctx
     ids = ids_all[:seq].view(-1, args.ctx)
