@@ -211,6 +211,12 @@ Findings:
 5. Next levers, evidence-ranked: adapter capacity (r32/r64 probe on the codefw diet),
    training ctx 1024 (eval chunks are 2048; long-range machinery under-trained), then the
    SFT-mixture arm. These become the cluster-3080 trainer's first jobs.
+6. Anecdotal but on-record (Daniel, LM Studio spot-check, nth-Fibonacci-digit prompt):
+   unrepaired stops mid-thought; **wiki-repaired loops in its thinking forever** — the
+   human-visible face of its 19.45/3.90 off-domain collapse; codefw- and mixfull-repaired
+   answer well. The floor's ranking matched interactive quality on first contact, which is
+   the M2 bet validated early. M2's task tiers add the objective version of this check
+   (repetition detection, generation completeness, docker-graded coding tasks).
 
 ## 1. Purpose
 
