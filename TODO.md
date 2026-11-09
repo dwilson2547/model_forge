@@ -84,10 +84,8 @@ keeps surgery + build + eval. Issue docs: `2026_11_07_llamacpp_cpu_finetune.md`,
 - [ ] Next repair experiment: diverse repair data (SFT mixture vs fineweb-edu — Gemma's
       candidates) evaluated over *multiple* corpora to separate domain adaptation from true
       repair (§0c caveat #2) ⬜
-- [ ] ctx-1024 repair arm (same codefw diet, ctx 512→1024): hypothesis — linear-attention
-      state flow + full-attention long-range patterns are under-repaired at 512 (deployments
-      run 18k!). Validate with a long-window PPL column added to the floor (e.g. 8k-token
-      chunks) + loop-threshold temp at long ctx; VRAM est. ~6-8 GiB, tok/s est. ~0.6-0.75× ⬜
+- [ ] ctx-1024 repair arm (same codefw diet, ctx 512→1024): **demoted to secondary** by the
+      long-window floor (§0e: wound does not widen at range; repair holds to 32k)
 - [ ] SFT mode in recover_gpu: chat-template application + completion-only loss masking
       (raw-text trainer can't use instruction data) ⬜
 - [ ] Incumbent-domain SFT corpus (small, LoRA-sized): resolved incident-operator cases as

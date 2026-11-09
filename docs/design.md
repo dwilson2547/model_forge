@@ -218,6 +218,31 @@ Findings:
    the M2 bet validated early. M2's task tiers add the objective version of this check
    (repetition detection, generation completeness, docker-graded coding tasks).
 
+## 0e. Long-window floor — measured overnight 2026-11-08→09 ✅ (overnight matrix: 36 ppl runs)
+
+3 models × 3 corpora × windows {4k, 8k, 16k, 32k} (f16, 6 chunks per window, llama-perplexity,
+`~/m0/runs/longwindow-results.jsonl` on the box). Questions: does the wound widen at range?
+does the repair hold at 32k?
+
+| corpus | pattern across all four windows |
+|---|---|
+| wikitext | repaired beats base at *every* window (8.06/7.59/7.27/9.10 vs base 9.50/9.56/8.58/11.24) — repair overshoot persists at range |
+| fineweb | repaired stays +1.6–1.8 over base, **flat** from 4k to 32k (11.50/11.32/11.63/10.84 vs ~9.2–9.9) |
+| code | gaps micro at every window (+0.1–0.4) |
+
+Findings → priority changes (absorbed into TODO M4):
+
+1. **Wound does NOT widen with distance; repair robust at long range.** The ctx-1024
+   hypothesis is unsupported by this data → demoted to secondary; the loop-threshold
+   sensitivity observed at 18k is more plausibly sampling-entanglement than under-repaired
+   long-range machinery.
+2. **The fineweb plateau is window-invariant** (+1.6–1.8 everywhere) — consistent across the
+   whole window axis with the r16 adapter-capacity ceiling of §0d. **The rank probe
+   (r32/r64, same codefw diet) becomes the top-ranked repair experiment.**
+3. Oddity ⚠: base wikitext PPL jumps at the 32k window (8.58@16k → 11.24@32k); only 6
+   deep-corpus chunks per cell, so corpus-tail variance is suspect — treat the 32k column
+   as noisier until re-measured with more chunks.
+
 ## 1. Purpose
 
 Turn the Ampere Altra box into a **model-making node**: fire a job like *"shrink Qwen3.8-27B to a ~9B
