@@ -35,6 +35,13 @@ Loop validated end-to-end on Qwen3.5-4B; measured the first quality cliff: drop8
 ## M2 — benchmark suite
 
 - [ ] Floor tier: wikitext-2 + fineweb-sample perplexity runner
+- [ ] Incident-triage benchmark task (proof-of-concept 2026-11-08, LM Studio): candidate models
+      analyze historical incident-operator reports (incident 46 = first sample: correct
+      schema, correct checks, connected findings, 18k ctx) and are graded on JSON schema
+      validity + factual grounding in the source bundle. Sampling protocol is part of the
+      score: temperature at which thinking loops (loop-threshold) ranked alongside accuracy —
+      sliced/repaired models loop at higher temps than stock (observed: 0.21 loops, 0.16 clean
+      on mixfull-repaired). Corpus + grading rubric to lift from infra/incident-operator history
 - [ ] Validate lm-eval GGUF/transformers CPU cost; fix the academic subset (GSM8K, ARC-E, HellaSwag)
 - [ ] Coding task: local-model-builder-style generate-and-run unit tests (`docker run --network none`)
 - [ ] Instruct checklist + long-context needle tasks; fixed seeds, greedy decoding
