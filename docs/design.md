@@ -176,6 +176,42 @@ Findings:
 4. Numbers: all rows in `~/m0/runs/multicorpus-results.jsonl` on the box; adversarial-repeat
    dedup applied once (a double-launched eval duplicated rows; values identical).
 
+## 0d. Repair-diet study, three-corpus floor — measured 2026-11-08 ✅
+
+Four repairs of the same drop2 wound with different diets (same recipe: QLoRA r16, 1–2 epochs,
+ctx 512, ~2,200 tok/s on the 5080), evaluated through the multi-corpus floor
+(`surgery/multicorpus.py`: wikitext-test, fineweb holdout disjoint from all repair data, code
+from llama.cpp sources; 24 chunks, M0-pinned threads).
+
+| Qwen3.5-4B (f16) | diet | wikitext | fineweb | code |
+|---|---|---:|---:|---:|
+| base | — | 9.33 | 10.44 | 3.17 |
+| drop2, unrepaired | — | 12.82 | 13.55 | 3.57 |
+| + wiki-repair | 4.8M wikitext | **8.16** | **19.45** | **3.90** |
+| + fw-repair | 4.3M fineweb-edu | 10.22 | 12.47 | 3.58 |
+| + codefw-repair | 3.2M code+fineweb | 9.97 | **12.34** | **3.28** |
+| + mixfull-repair | 9.5M fw62/wiki27/code12 | **8.42** | 12.39 | 3.36 |
+
+Findings:
+
+1. **Single-corpus PPL lies, proven** (§0c's caveat, now with the control): the wikitext-repaired
+   model beats base on wikitext (8.16) while carrying an **86% fineweb regression** (19.45) and
+   23% code regression. Multi-corpus eval caught it for ~10 min of cost.
+2. **Diets fingerprint where they point.** Every diet healed its own domains and left others
+   untouched or damaged; no diet improved an absent domain except via generalization from
+   similar text (fw→wiki transfer: 74% wound closure without seeing wikitext).
+3. **Diversity beats dose — and code is the multivitamin.** codefw (3.2M) beats fw-only
+   (4.3M) on *every* corpus; its 12% code share healed code 72%, fineweb 39%, and unseen
+   wikitext 82%. Structured code transfers generalizable structure to prose domains.
+4. **The full mix buys wikitext, not breadth.** mixfull (3× dose of codefw, adds wikitext)
+   improves wikitext (9.97→8.42, overshooting base = partial specialization) while fineweb
+   plateaus (12.39 vs 12.34) — **all diverse diets plateau at fineweb ≈ 12.3–12.5 regardless
+   of dose**, the first real evidence of the r16 adapter-capacity ceiling (0.5% trainable).
+   Balanced-repair ranking by total deviation from base: codefw < mixfull < fw-only.
+5. Next levers, evidence-ranked: adapter capacity (r32/r64 probe on the codefw diet),
+   training ctx 1024 (eval chunks are 2048; long-range machinery under-trained), then the
+   SFT-mixture arm. These become the cluster-3080 trainer's first jobs.
+
 ## 1. Purpose
 
 Turn the Ampere Altra box into a **model-making node**: fire a job like *"shrink Qwen3.8-27B to a ~9B
