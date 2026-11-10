@@ -3,16 +3,22 @@
 Status: **verified against the code, not yet acted on.** Recorded here so nothing is lost —
 priorities in TODO.md. Reviewer read the repo blind; all claims checked line-by-line.
 
-## 1. `drop2-ranked-fused` recipe is a no-op fusion ✅ VERIFIED
+## 1. `drop2-ranked-fused` recipe is a no-op fusion ✅ VERIFIED (with context)
 
 Layer pattern is linear,linear,linear,full → full-attention at 3,7,…,35. The recipe drops
 24 and 28; `apply_drop` fuses a dropped layer into its predecessor (23, 27) — and
 23/27 are the full-attention layers while 24/28 are linear, so the
 `type(layer) is type(nxt)` guard (surgery/ops.py:97) is false both times. **Nothing was
-merged: drop2-fused is byte-identical to drop2.** No results are invalid — the §0b
-gradient board simply ran the same model twice under two names. Action (low priority):
-drop the `fuse_pairs` op from the recipe or delete the recipe; if fusion is ever meant
-to matter, the guard needs a type-bridging path (e.g. average matching projections only).
+merged: drop2-fused is byte-identical to drop2.**
+
+Context the reviewer didn't have: §0b finding 2 already recorded both halves of this —
+fusion is genuinely harmful on linear↔linear pairs (drop6-fused: 27 → 39 PPL), and
+silently no-ops on full↔linear. The harm conclusion is safe: it rests on drop6's pairs
+([21,22], [25,26] fire per the guard arithmetic — the "+2 fused pairs" in the §0b table
+checks out). The actual cost here: drop2-fused (and 3 of 5 pairs in drop4-fused) ran
+full build+eval cycles as unknowing no-ops — wasted compute, not a wrong conclusion.
+Action (low priority): delete the drop2-fused recipe (or its `fuse_pairs` op); keep
+`fuse_pairs` in the schema for dense families only, as §0b already concluded.
 
 ## 2. NF4-trained adapter merged into bf16 base ✅ VERIFIED, experiment queued
 
