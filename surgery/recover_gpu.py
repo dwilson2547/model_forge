@@ -55,6 +55,11 @@ def main():
     ap.add_argument("--calibrate", action="store_true",
                     help="measure throughput only: no checkpoints, no merge, no GGUF")
     ap.add_argument("--merge-only", default="", help="skip training; merge this adapter dir into a bf16 CPU copy of the base and save")
+    ap.add_argument("--sft", action="store_true",
+                    help="chat-template SFT: fixed generic user turn + corpus chunk as "
+                         "assistant content + <|im_end|>; loss on assistant tokens only. "
+                         "Fixes the raw-completion EOS-discipline erosion seen in 0g "
+                         "(repaired arms ramble, stop at the limit mid-function).")
     args = ap.parse_args()
 
     if args.merge_only:
@@ -103,9 +108,37 @@ def main():
               f"{args.max_chars:,}; training on the first {args.max_chars:,} only. "
               f"Raise --max-chars if this is unintended (it was, once: 2026-11-08).", flush=True)
     text = raw[: args.max_chars]
-    ids_all = tok(text, return_tensors="pt")["input_ids"][0]
-    seq = (ids_all.shape[0] // args.ctx) * args.ctx
-    ids = ids_all[:seq].view(-1, args.ctx)
+    ids_all = tok(text, return_tensors="pt")[ "input_ids" ][0]
+    if args.sft:
+        # One fixed generic user turn for every example (format anchoring; the assistant
+        # content carries the repair signal). Slicing token ids directly avoids any
+        # decode/re-encode boundary drift vs. the raw-mode diet.
+        SFT_USER_PROMPT = "Continue the following text in the same style."
+        prompt_str = tok.apply_chat_template(
+            [{"role": "user", "content": SFT_USER_PROMPT}],
+            tokenize=False, add_generation_prompt=True)
+        prefix = tok(prompt_str, add_special_tokens=False)["input_ids"]
+        im_end = tok("<|im_end|>", add_special_tokens=False)["input_ids"]
+        assert len(im_end) == 1, f"im_end not a single token: {im_end}"
+        P = len(prefix)
+        C = args.ctx - P - 1                     # content tokens per example
+        n_examples = ids_all.shape[0] // C
+        ids = torch.stack([
+            torch.cat([torch.tensor(prefix),
+                    ids_all[i * C: (i + 1) * C],
+                    torch.tensor(im_end)])
+            for i in range(n_examples)])
+        labels = ids.clone()
+        labels[:, :P] = -100                     # prompt tokens are not targets
+        print(f"[recover-gpu] SFT: prefix {P} tok + content {C} tok + im_end "
+              f"(eos {im_end[0]}); {n_examples} examples; "
+              f"loss on {C + 1}/{args.ctx} tokens/example", flush=True)
+        print(f"[recover-gpu] SFT example[0] decode: {repr(tok.decode(ids[0])[:300])}",
+              flush=True)
+    else:
+        seq = (ids_all.shape[0] // args.ctx) * args.ctx
+        ids = ids_all[:seq].view(-1, args.ctx)
+        labels = None
     n_chunks = ids.shape[0]
     steps_per_epoch = n_chunks // (args.batch * args.accum)
     total_steps = int(steps_per_epoch * args.epochs)
@@ -126,9 +159,15 @@ def main():
         s = (step * args.batch) % n_chunks
         xb = ids[s: s + args.batch].to(model.device)
         logits = model(input_ids=xb).logits
-        loss = torch.nn.functional.cross_entropy(
-            logits[:, :-1].reshape(-1, logits.shape[-1]),
-            xb[:, 1:].reshape(-1))
+        if labels is not None:  # SFT: completion-only loss over assistant tokens
+            yb = labels[s: s + args.batch].to(model.device)
+            loss = torch.nn.functional.cross_entropy(
+                logits[:, :-1].reshape(-1, logits.shape[-1]),
+                yb[:, 1:].reshape(-1), ignore_index=-100)
+        else:
+            loss = torch.nn.functional.cross_entropy(
+                logits[:, :-1].reshape(-1, logits.shape[-1]),
+                xb[:, 1:].reshape(-1))
         (loss / args.accum).backward()
         losses.append(loss.item())
         tokens_seen += xb.numel()
@@ -166,6 +205,7 @@ def main():
             "hf_dir": str(args.hf_dir), "corpus": str(args.corpus),
             "params": {"epochs": args.epochs, "ctx": args.ctx, "batch": args.batch,
                    "lora_r": args.lora_r, "lr": args.lr},
+            "format": ("sft-chat" if args.sft else "raw-completion"),
         "loss_first": losses[0], "loss_last20_avg": sum(losses[-20:]) / min(20, len(losses)),
         "tokens_seen": tokens_seen, "train_tok_per_s": tokens_seen / wall,
         "wall_seconds": wall, "hf_recovered": str(hf_out),

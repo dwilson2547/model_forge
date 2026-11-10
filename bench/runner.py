@@ -43,9 +43,9 @@ def metrics_pack(server, results_path_size):
     return out
 
 
-def run_model(label, model_path, tiers=None):
+def run_model(label, model_path, tiers=None, chat=False):
     model_path = Path(model_path)
-    row = {"label": label, "model": str(model_path)}
+    row = {"label": label, "model": str(model_path), "task_mode": "chat" if chat else "raw"}
     if tiers:
         row["tiers"] = tiers
     with LlamaServer(model_path) as server:
@@ -53,7 +53,7 @@ def run_model(label, model_path, tiers=None):
         for task in ALL_TASKS:
             if tiers and task["group"] not in tiers:
                 continue
-            task_rows.append(run_task(server, task))
+            task_rows.append(run_task(server, task, chat=chat))
             print(f"  {task['id']:18s} {task_rows[-1]['score']:.2f} "
                   f"({task_rows[-1]['detail']})", flush=True)
         row["tasks"] = task_rows
@@ -65,7 +65,7 @@ def run_model(label, model_path, tiers=None):
         row["composite"] = round(
             sum(v for v in groups.values() if v is not None) /
             max(1, len([v for v in groups.values() if v is not None])), 3)
-        thresh, temps = loop_threshold(server)
+        thresh, temps = loop_threshold(server, chat=chat)
         row["loop_threshold"] = thresh
         row["loop_rows"] = temps
         if not tiers:
@@ -96,16 +96,23 @@ def leaderboard(rows):
 def main():
     args = sys.argv[1:]
     tiers = None
+    chat = False
     if args and args[0] == "--tiers":
         tiers = args[1].split(",")
         args = args[2:]
+    if args and args[0] == "--chat":
+        chat = True
+        args = args[1:]
     if not args:
         raise SystemExit(__doc__)
     jobs = [a.split("=", 1) for a in args]
     rows = []
     for label, path in jobs:
         print(f"== suite: {label} ({path})", flush=True)
-        rows.append(run_model(label, path, tiers=tiers))
+        if chat:
+            print("  (chat mode: /v1/chat/completions, server-side chat template)",
+                  flush=True)
+        rows.append(run_model(label, path, tiers=tiers, chat=chat))
     leaderboard(rows)
 
 

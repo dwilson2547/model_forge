@@ -238,12 +238,16 @@ def _detect_loop(text, n=10, threshold=3):
     return count >= threshold
 
 
-def loop_threshold(server, max_tokens=192):
+def loop_threshold(server, max_tokens=192, chat=False):
     """Highest temperature at which the model does NOT loop, plus per-temp results."""
     rows = []
     for temp in LOOP_TEMPS:
-        out = server.completion(LOOP_PROMPT, max_tokens=max_tokens,
-                                temperature=temp, top_k=40)
+        if chat:
+            out = server.chat(LOOP_PROMPT, max_tokens=max_tokens,
+                              temperature=temp, top_k=40)
+        else:
+            out = server.completion(LOOP_PROMPT, max_tokens=max_tokens,
+                                    temperature=temp, top_k=40)
         looped = _detect_loop(out["text"])
         rows.append({"temperature": temp, "looped": looped})
     thresh = max((r["temperature"] for r in rows if not r["looped"]), default=None)
@@ -253,17 +257,20 @@ def loop_threshold(server, max_tokens=192):
 ALL_TASKS = CODING + INSTRUCT + NEEDLE
 
 
-def run_task(server, task):
+def run_task(server, task, chat=False):
+    # Coding needs 2048: raw completions think hundreds of tokens before/after the
+    # code; 512 truncated blocks mid-statement (SyntaxError) across every arm.
+    budget = 2048 if task["group"] == "coding" else task.get("max_tokens", 256)
+    if chat:
+        resp = server.chat(task["prompt"], max_tokens=budget)
+    else:
+        resp = server.completion(task["prompt"], max_tokens=budget)
     if task["group"] == "coding":
-        # 512 was thinking-tail starvation: raw completions think hundreds of tokens
-        # before/after the code, truncating the block mid-statement (SyntaxError).
-        resp = server.completion(task["prompt"], max_tokens=2048)
         score, detail = _grade_code(task, resp["text"])
         if resp.get("stop_type") in ("length", "limit"):  # llama.cpp calls it "limit"
             detail = f"BUDGET-EXHAUSTED; {detail}"
         return {"id": task["id"], "group": task["group"], "score": score,
                 "detail": detail, "stop_type": resp.get("stop_type"),
                 "text_preview": resp["text"][-400:]}
-    resp = server.completion(task["prompt"], max_tokens=task.get("max_tokens", 256))
     score, detail = task["grade"](resp["text"])
     return {"id": task["id"], "group": task["group"], "score": score, "detail": detail}
