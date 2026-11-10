@@ -259,7 +259,7 @@ def run_task(server, task):
         # before/after the code, truncating the block mid-statement (SyntaxError).
         resp = server.completion(task["prompt"], max_tokens=2048)
         score, detail = _grade_code(task, resp["text"])
-        if resp.get("stop_type") == "length":
+        if resp.get("stop_type") in ("length", "limit"):  # llama.cpp calls it "limit"
             detail = f"BUDGET-EXHAUSTED; {detail}"
         return {"id": task["id"], "group": task["group"], "score": score,
                 "detail": detail, "stop_type": resp.get("stop_type"),

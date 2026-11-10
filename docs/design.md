@@ -283,6 +283,58 @@ dose is the standing conclusion; the recipe stack (diet > dose/order > rank > lr
 at small scale. Further plateau movement would need substrate change (bf16 LoRA on a GPU
 with headroom, not NF4) or full-weight repair (out of reach locally).
 
+## 0g. M2 suite — five-model board, first task-level leaderboard 2026-11-09 ✅
+
+Suite v1 (`bench/`): llama-server harness at the §0-pinned thread config; coding tier
+docker-graded (executed against unit tests, `--network none`, non-root), instruct tier
+verifiable-constraint tasks, needle@~7.5k tokens, loop-threshold sweep (temps 0→0.7,
+10-gram repetition detector), metric pack (gen t/s, TTFT@4k, peak RSS, GiB, quality/GiB).
+All f16. Composite = mean(coding, instruct, needle). Single-run, single-seed — group
+deltas under one task (~0.25) are within noise; only treat larger effects as real.
+
+| arm | coding | instruct | needle | composite | loop-thresh | t/s | TTFT@4k | RSS GiB | q/GiB |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| base | 0.75 | 0.2 | 1.0 | **0.65** | 0.7 | 9.5 | 12.9s | 11.6 | 0.083 |
+| drop2 (unrepaired) | 0.75 | 0.2 | 1.0 | **0.65** | 0.7 | 9.9 | 12.1s | 11.0 | 0.087 |
+| wikirep | 0.0 | 0.2 | 1.0 | **0.40** | **0.0** | 10.0 | 12.0s | 10.7 | 0.054 |
+| codefw (r16@1e-4) | 0.25 | 0.2 | 1.0 | **0.483** | 0.7 | 9.9 | 12.0s | 11.0 | 0.063 |
+| mixfull (r16@1e-4) | 0.25 | 0.0 | 1.0 | **0.417** | 0.7 | 9.8 | 12.1s | 11.0 | 0.055 |
+
+**Reconciliation pass (coding rerun at max_tokens 2048, stop_type recorded):** the first
+board ran coding at 512 tokens — the same thinking-tail starvation the needle tier had
+already fixed; several failures were truncated code (`print(is` → SyntaxError). At 2048
+the group scores are unchanged, so the table stands, but attribution is now clean:
+base/drop2 fail on genuine bad code (IndentationError, wrong logic); wikirep emits
+`= = = =` garbage rows in all four tasks; codefw/mixfull write huge raw-completion
+preambles (hundreds of tokens of "reasoning") and frequently stop at the limit
+mid-function. Note: llama.cpp reports the limit stop as `stop_type: "limit"`, not
+`"length"`.
+
+**Findings:**
+1. **wikirep's floor-metric collapse translates to task collapse.** §0d flagged the
+   wiki-only repair as a domain trap (fineweb PPL 19.45, +86% vs base); here it is the
+   only arm that fails everything, and its loop-threshold is **0.0** — it loops at every
+   temperature. This is precisely the LM Studio "thought itself into an infinite loop"
+   observation, now quantified as a suite metric. Loop-threshold is the highest-signal
+   task-level discriminator we have.
+2. **Unrepaired drop2 matches base on every tier at f16** (0.65 across the board) while
+   being 0.4 GiB smaller — the v1 suite does not detect the PPL damage the floors show
+   on this arm. Either the tasks are too easy, or residual PPL damage doesn't manifest
+   at this difficulty. Suite v1 ceiling: needle 1.0 for all arms, coding 4 tasks.
+3. **The repaired arms do NOT yet beat drop2 on tasks** despite better floor PPL
+   (codefw: 9.87/12.22/3.33 vs drop2's higher floors). The r16@1e-4 patch models ramble:
+   raw-completion generations spend hundreds of tokens on pre-code "reasoning" and stop
+   at the limit mid-function. QLoRA on completion-format corpus evidently eroded EOS
+   discipline in raw mode. Confirms the standing TODO: **SFT mode in recover_gpu**
+   (chat template + completion-only loss) is prerequisite before task boards can be
+   expected to favor repaired arms — not evidence that repair made models worse.
+4. Metrics pack is flat across arms (~9.5–10 t/s, TTFT ~12s @4k on this box) as expected
+   for same-family f16 weights; peak RSS differences track file size only.
+
+Data: `bench-results.jsonl` on the Altra (first 5 rows = full board with metrics pack;
+trailing 5 = coding-only rerun with `stop_type` + `text_preview`); logs `bench-full.log`
+and `bench-coding-rerun.log`.
+
 ## 1. Purpose
 
 Turn the Ampere Altra box into a **model-making node**: fire a job like *"shrink Qwen3.8-27B to a ~9B
