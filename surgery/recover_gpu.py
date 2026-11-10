@@ -46,7 +46,9 @@ def main():
     ap.add_argument("--batch", type=int, default=4)
     ap.add_argument("--accum", type=int, default=1)
     ap.add_argument("--lora-r", type=int, default=16)
-    ap.add_argument("--lr", type=float, default=2e-4)
+    ap.add_argument("--lr", type=float, default=1e-4,
+                    help="QLoRA lr; 1e-4 measured best for repair-scale doses (2k-floor "
+                         "sweep 2026-11-09: 1e-4 < 2e-4 << 4e-4, which nearly unwound the repair)")
     ap.add_argument("--save-every", type=int, default=100, help="steps between adapter checkpoints")
     ap.add_argument("--resume", default="", help="path to adapter checkpoint dir to resume from")
     ap.add_argument("--max-chars", type=int, default=12_000_000)

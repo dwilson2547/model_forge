@@ -271,6 +271,18 @@ for a 4B bf16; CPU is 2 tok/s) — marked out of reach for now.
 Priorities updated in TODO: invert the direction on the next knob — **probe rank DOWN (r8)**,
 sweep lr at r16, and treat the plateau as QLoRA-substrate-bound until either moves it.
 
+**Probe extension, same day — both knobs mapped:** r8 heals marginally worse than r16
+(10.02/12.41/3.38) → the rank curve peaks at r16 for this dose (r8 ≲ r16 > r32 > r64).
+The lr curve at r16: 1e-4 → **9.87/12.22/3.33** (best arm of the whole study; fineweb gap
+now +1.78), 2e-4 → 9.97/12.34/3.28, 4e-4 → 11.64/13.74/3.72 (nearly unwinds the repair).
+Both curves unimodal and consistent with the generalization-over-memorization story:
+gentle steps + small rank = healing; oversupply in either direction = noise-fitting.
+Net: the best-known repair recipe is **r16 @ lr 1e-4** (now the recover_gpu default), and
+the remaining ~+1.8 fineweb gap is robust to rank and lr — QLoRA-substrate-bound at this
+dose is the standing conclusion; the recipe stack (diet > dose/order > rank > lr) is closed
+at small scale. Further plateau movement would need substrate change (bf16 LoRA on a GPU
+with headroom, not NF4) or full-weight repair (out of reach locally).
+
 ## 1. Purpose
 
 Turn the Ampere Altra box into a **model-making node**: fire a job like *"shrink Qwen3.8-27B to a ~9B
