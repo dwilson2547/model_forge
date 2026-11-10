@@ -43,12 +43,16 @@ def metrics_pack(server, results_path_size):
     return out
 
 
-def run_model(label, model_path):
+def run_model(label, model_path, tiers=None):
     model_path = Path(model_path)
     row = {"label": label, "model": str(model_path)}
+    if tiers:
+        row["tiers"] = tiers
     with LlamaServer(model_path) as server:
         task_rows = []
         for task in ALL_TASKS:
+            if tiers and task["group"] not in tiers:
+                continue
             task_rows.append(run_task(server, task))
             print(f"  {task['id']:18s} {task_rows[-1]['score']:.2f} "
                   f"({task_rows[-1]['detail']})", flush=True)
@@ -64,8 +68,11 @@ def run_model(label, model_path):
         thresh, temps = loop_threshold(server)
         row["loop_threshold"] = thresh
         row["loop_rows"] = temps
-        row["metrics"] = metrics_pack(server, model_path.stat().st_size)
-    qp = row["metrics"]["size_gib"]
+        if not tiers:
+            row["metrics"] = metrics_pack(server, model_path.stat().st_size)
+        else:
+            row["metrics"] = {}
+    qp = (row.get("metrics") or {}).get("size_gib")
     row["quality_per_gib"] = round(row["composite"] / qp, 3) if qp else None
     RESULTS.parent.mkdir(parents=True, exist_ok=True)
     with RESULTS.open("a") as f:
@@ -88,13 +95,17 @@ def leaderboard(rows):
 
 def main():
     args = sys.argv[1:]
+    tiers = None
+    if args and args[0] == "--tiers":
+        tiers = args[1].split(",")
+        args = args[2:]
     if not args:
         raise SystemExit(__doc__)
     jobs = [a.split("=", 1) for a in args]
     rows = []
     for label, path in jobs:
         print(f"== suite: {label} ({path})", flush=True)
-        rows.append(run_model(label, path))
+        rows.append(run_model(label, path, tiers=tiers))
     leaderboard(rows)
 
 

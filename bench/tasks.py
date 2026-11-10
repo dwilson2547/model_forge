@@ -255,9 +255,15 @@ ALL_TASKS = CODING + INSTRUCT + NEEDLE
 
 def run_task(server, task):
     if task["group"] == "coding":
-        resp = server.completion(task["prompt"], max_tokens=512)
+        # 512 was thinking-tail starvation: raw completions think hundreds of tokens
+        # before/after the code, truncating the block mid-statement (SyntaxError).
+        resp = server.completion(task["prompt"], max_tokens=2048)
         score, detail = _grade_code(task, resp["text"])
-    else:
-        resp = server.completion(task["prompt"], max_tokens=task.get("max_tokens", 256))
-        score, detail = task["grade"](resp["text"])
+        if resp.get("stop_type") == "length":
+            detail = f"BUDGET-EXHAUSTED; {detail}"
+        return {"id": task["id"], "group": task["group"], "score": score,
+                "detail": detail, "stop_type": resp.get("stop_type"),
+                "text_preview": resp["text"][-400:]}
+    resp = server.completion(task["prompt"], max_tokens=task.get("max_tokens", 256))
+    score, detail = task["grade"](resp["text"])
     return {"id": task["id"], "group": task["group"], "score": score, "detail": detail}

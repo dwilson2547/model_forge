@@ -94,7 +94,8 @@ class LlamaServer:
         if not stream_first_token:
             with urllib.request.urlopen(req, timeout=600) as r:
                 out = json.loads(r.read())
-            return {"text": out.get("content", ""), "tokens": out.get("tokens_predicted", 0)}
+            return {"text": out.get("content", ""), "tokens": out.get("tokens_predicted", 0),
+                    "stop_type": out.get("stop_type", "stop")}
         t0 = time.time()
         ttft = None
         text = []
