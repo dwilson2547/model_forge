@@ -32,6 +32,22 @@ Loop validated end-to-end on Qwen3.5-4B; measured the first quality cliff: drop8
 - [ ] (bookkeeping) AML pytorch images are torch 1.12.1 — dead end for Qwen3.x stack decisions;
       stock torch 2.x it is, per M1's forge_env (torch 2.15.0 works fine on the box)
 
+## External review follow-ups (Claude, 2026-11-10 — verified, not yet acted on)
+
+Full detail in `docs/issues/2026_11_10_external_review_findings.md`. All six verified.
+
+- [ ] drop2-ranked-fused recipe: `fuse_pairs` never fired (24/28 are linear, their
+      predecessors 23/27 are full-attention; type guard false) — drop the op or the recipe
+- [ ] NF4→bf16 merge-shift test (adapter-on-NF4 PPL vs merged-bf16 PPL) — could be part of
+      the §0f plateau; also `--calibrate` a bf16-LoRA VRAM probe at batch 2–4 on the 5080
+- [ ] Diet-build audit: confirm whether mixed.train.txt was doc-interleaved or source-
+      concatenated (builder not in repo); add per-epoch `randperm` shuffling + cap sampling
+      across the whole file in recover_gpu
+- [ ] Fix `--accum` (truncates epochs to 1/N; cosine T_max/step mismatch) before any 27B run
+- [ ] Ranking v2: average layer_skip_scores over 10–20 windows from a mixed calibration set
+- [ ] Minor: `--save-every 0` NameError; dead `ts` line in recover_gpu
+
+
 ## M2 — benchmark suite
 
 - [ ] Floor tier: wikitext-2 + fineweb-sample perplexity runner
