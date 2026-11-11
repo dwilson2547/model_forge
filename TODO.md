@@ -27,12 +27,11 @@ Loop validated end-to-end on Qwen3.5-4B; measured the first quality cliff: drop8
       retired for qwen3_5, recovery critical path, 27B confirmed same hybrid arch
 - [ ] FFN importance scoring v2 (activation-aware, not norm-only); width cuts stay off the
       menu until it passes a re-test at 0.85–0.95
-- [x→mostly] Layer scoring v2: BlockInfluence form cos(in_i, out_i) over 10 windows landed
-      2026-11-11 (review r2 f3 + r1 f5); re-score of the 4B IN FLIGHT on the box
-      (~/m0/runs/rescore-4b/, driver committed as surgery/rescore.py). Remaining after it
-      lands: compare pick sets vs [24,28] / [12,24,26,28]; then decide whether the
-      spatial-spread constraint is still needed (band-clustering may have been the
-      scorer bug, not the architecture)
+- [x] Layer scoring v2 + 4B re-score landed (design §0j.1): the fixed scorer wants
+      [25,29] for count2 (vs shipped [24,28]), and band-clustering SURVIVES the fix —
+      spatial-spread constraint stays on the menu; count4/6 sets spread wider (21, 13)
+      on their own. No 27B pick without the fixed scorer. Queued candidate: drop2-[25,29]
+      + same repair, to see if the corrected pick buys floor
 - [ ] (bookkeeping) AML pytorch images are torch 1.12.1 — dead end for Qwen3.x stack decisions;
       stock torch 2.x it is, per M1's forge_env (torch 2.15.0 works fine on the box)
 
@@ -70,8 +69,9 @@ Fixes + fired experiments recorded in design §0j.
       precision mixing; diet confound could mask a mixer gain). Isolating run queued
 - [x] Per-epoch shuffle + whole-file striped cap sampling in the trainer. [ ] Interleaving
       diet builder still to commit (diet re-runs depend on it)
-- [x] Layer scorer off-by-one fixed (cos(in_i, out_i), 10-window average); [ ] re-score
-      the 4B + compare pick sets vs [24,28] / [12,24,26,28] before any 27B drop set
+- [x] Layer scorer off-by-one fixed (cos(in_i, out_i), 10-window average) + 4B re-score
+      LANDED (§0j.1): picks shift to [25,29] / [13,21,25,29] / [1,13,16,21,25,29];
+      fixes go into any 27B drop-set decision
 - [ ] v4 SFT pre-flight: drop-not-truncate + per-kind skip counts done in the trainer;
       correctness gate, alert-family holdout split, and the ctx decision belong to v4
 - [ ] Chat grading: grade `content` only (no reasoning fallback), last fence for code —

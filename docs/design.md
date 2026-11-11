@@ -705,6 +705,34 @@ v3 clarification while these run: v3 itself trained at ctx 6144 (per-run
 shipped model — its fixes are prospective for v4; v3's real gaps (system-prompt flattening,
 no correctness gate) stand as diagnosed in §0i.
 
+### 0j.1 — 4B re-score with the fixed BlockInfluence scorer (landed 2026-11-11)
+
+The shipped recipes' drop sets were chosen with the buggy neighbor-similarity scorer
+(cos across layers i+i+1, one window). Re-scored the base with the fixed per-layer form
+(10 windows, review r2 f3 + r1 f5), same wikitext calibration:
+
+| drop count | old picks (shipped) | new picks (fixed scorer) |
+|---|---|---|
+| 2 | [24, 28] | **[25, 29]** |
+| 4 | [12, 24, 26, 28] | [13, 21, 25, 29] |
+| 6 | [12, 20, 22, 24, 26, 28] | [1, 13, 16, 21, 25, 29] |
+
+Scores on the top band (old | new): 12: .899 | .933, 13: .886 | .939, 21: .890 | .944,
+24: .929 | .952, 25: .926 | **.961**, 29: .877 | .953. Two readings:
+
+1. **The [24,28] pick was partly neighbors' evidence** — the fixed scorer now prefers
+   25 and 29, both linear. The shipped drop2 build is valid but likely not the
+   argmax of its own recipe's intent. A drop2-[25,29] arm (same repair recipe) is a
+   queued candidate to test whether pick correction buys floor.
+2. **Band-clustering survives the fix** — the mid-20s region is still the droppable
+   tail with the per-layer scorer, so the spatial-spread-constraint question (TODO M1)
+   is NOT explained away by the off-by-one. The count4/6 sets now include 21 and 13,
+   spreading wider than the old band — the corrected scorer may already be doing the
+   spreading the constraint wanted.
+
+No 27B drop decision until recipes re-derive picks through the fixed scorer
+(driver: `surgery/rescore.py`, committed; artifacts: `~/m0/runs/rescore-4b/`).
+
 ## 5. Milestones
 
 Tracked in [`TODO.md`](../TODO.md); summary:
