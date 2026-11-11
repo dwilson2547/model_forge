@@ -56,10 +56,14 @@ def main():
                     help="measure throughput only: no checkpoints, no merge, no GGUF")
     ap.add_argument("--merge-only", default="", help="skip training; merge this adapter dir into a bf16 CPU copy of the base and save")
     ap.add_argument("--sft", action="store_true",
-                    help="chat-template SFT: fixed generic user turn + corpus chunk as "
-                         "assistant content + <|im_end|>; loss on assistant tokens only. "
-                         "Fixes the raw-completion EOS-discipline erosion seen in 0g "
-                         "(repaired arms ramble, stop at the limit mid-function).")
+                    help="chat-template SFT on a plain-text corpus (v2 pair design)")
+    ap.add_argument("--sft-dataset", default="",
+                    help="messages-JSONL SFT (v3): records {user, reasoning, answer}. "
+                         "Targets render in the native assistant format "
+                         "(prefix auto-opens the think block) + reasoning + "
+                         "</think\\n\\n> + answer + <|im_end|>, loss on the whole target. "
+                         "This is the fix for v1/v2 whose content never left the think "
+                         "region (LM Studio showed 'Thought ... then died').")
     args = ap.parse_args()
 
     if args.merge_only:
@@ -102,66 +106,108 @@ def main():
         print(f"[recover-gpu] resumed adapter from {args.resume}", flush=True)
     model.print_trainable_parameters()
 
-    raw = Path(args.corpus).read_text()
-    if len(raw) > args.max_chars:
-        print(f"[recover-gpu] WARNING: corpus {len(raw):,} chars exceeds --max-chars "
-              f"{args.max_chars:,}; training on the first {args.max_chars:,} only. "
-              f"Raise --max-chars if this is unintended (it was, once: 2026-11-08).", flush=True)
-    text = raw[: args.max_chars]
-    ids_all = tok(text, return_tensors="pt")["input_ids"][0]
-    if args.sft:
-        # v2: v1's single fixed generic prompt collapsed instruction-following
-        # (chat-mode board 2026-11-10: sft arm emitted corpus-style counting with
-        # perfect eos discipline but scored 0 everywhere - it learned "any user
-        # turn = continue text", never learning to read the user content).
-        # v2 alternates examples: generic prompts (6 rotations) / paired
-        # continuation (user turn carries the first K tokens of the content as
-        # text, assistant completes it - forces reading the user message).
-        im_end = tok("<|im_end|>", add_special_tokens=False)["input_ids"]
-        assert len(im_end) == 1, f"im_end not a single token: {im_end}"
-        SFT_GENERIC = ["Continue the following text in the same style.",
-                       "Write the next part of this text.",
-                       "Continue writing the document.",
-                       "Provide the continuation of this passage.",
-                       "Complete the following text.",
-                       "Extend this writing naturally."]
-        B = args.ctx - 130          # content block tokens (fits any prefix <= 99)
-        K = 32                      # paired-example user-context tokens
-        ids_rows, lab_rows = [], []
-        for bi in range(ids_all.shape[0] // B):
-            block = ids_all[bi * B: (bi + 1) * B]
-            if bi % 2:               # paired continuation: read the user turn
-                user_text = tok.decode(block[:K])
-                content = block[K:]
-            else:                    # generic prompt, rotated
-                user_text = SFT_GENERIC[bi // 2 % len(SFT_GENERIC)]
-                content = block
-            prompt_str = tok.apply_chat_template(
-                [{"role": "user", "content": user_text}],
-                tokenize=False, add_generation_prompt=True)
-            prefix = tok(prompt_str, add_special_tokens=False)["input_ids"]
-            ex = list(prefix) + list(content) + list(im_end)
-            lab = [-100] * len(prefix) + list(content) + list(im_end)
-            if len(ex) > args.ctx:            # rare long-prefix edge: truncate
-                ex, lab = ex[:args.ctx], lab[:args.ctx]
-            pad = args.ctx - len(ex)          # causal mask ignores the pad tail
-            ids_rows.append(ex + im_end * pad)
-            lab_rows.append(lab + [-100] * pad)
-        ids = torch.tensor(ids_rows)
-        labels = torch.tensor(lab_rows)
-        print(f"[recover-gpu] SFT v2: {ids.shape[0]} examples (half paired K={K}), "
-              f"block {B} tok; example[0]: {repr(tok.decode(ids[0])[:220])}", flush=True)
+    if args.sft_dataset:
+        # v3: records {user, reasoning, answer}. Target rendered through the
+        # template's own reasoning_content path, so the think-open/close
+        # structure is byte-exact native (never hand-assembled): the generation
+        # prompt auto-OPENS the think block; the model must learn to CLOSE it -
+        # the missing piece from v1/v2 (their content never left the think
+        # region; LM Studio showed "Thought ... then died").
+        import json as _json
+        ds = [_json.loads(l) for l in Path(args.sft_dataset).open()]
+        examples = []
+        for rec in ds:
+            user_msgs = [{"role": "user", "content": rec["user"]}]
+            uprefix = tok.apply_chat_template(
+                user_msgs, tokenize=False, add_generation_prompt=False)
+            full = tok.apply_chat_template(
+                user_msgs + [{"role": "assistant",
+                              "reasoning_content": rec["reasoning"],
+                              "content": rec["answer"]}],
+                tokenize=False, add_generation_prompt=False)
+            assert full.startswith(uprefix), "template prefix drift"
+            target_str = full[len(uprefix):].rstrip("\n")   # keep up to <|im_end|>
+            prefix = tok(uprefix, add_special_tokens=False)["input_ids"]
+            tgt = tok(target_str, add_special_tokens=False)["input_ids"]
+            if len(prefix) > args.ctx - 24:
+                continue                    # bundle alone too long for this ctx
+            if len(prefix) + len(tgt) > args.ctx:
+                tgt = tgt[: args.ctx - len(prefix)]
+            if len(prefix) + len(tgt) < 24:    # degenerate after truncation
+                continue
+            examples.append((torch.tensor(prefix + tgt),
+                             torch.tensor([-100] * len(prefix) + tgt)))
+        n_chunks = len(examples)
+        steps_per_epoch = n_chunks // (args.batch * args.accum)
+        total_steps = int(steps_per_epoch * args.epochs)
+        print(f"[recover-gpu] SFT v3 dataset: {n_chunks} examples "
+              f"(longest {max(len(e[0]) for e in examples)} tok); "
+              f"{steps_per_epoch} steps/epoch; {total_steps} steps total",
+              flush=True)
+        show = tok.decode(examples[0][0])
+        print(f"[recover-gpu] v3 example[0] target tail: {repr(show[-160:])}",
+              flush=True)
+        # batch collation now happens per batch (variable lengths); rewire below
     else:
-        seq = (ids_all.shape[0] // args.ctx) * args.ctx
-        ids = ids_all[:seq].view(-1, args.ctx)
-        labels = None
-    n_chunks = ids.shape[0]
-    steps_per_epoch = n_chunks // (args.batch * args.accum)
-    total_steps = int(steps_per_epoch * args.epochs)
-    print(f"[recover-gpu] {n_chunks} chunks x {args.ctx} tok; "
-          f"{steps_per_epoch} steps/epoch; {total_steps} steps total", flush=True)
+        raw = Path(args.corpus).read_text()
+        if len(raw) > args.max_chars:
+            print(f"[recover-gpu] WARNING: corpus {len(raw):,} chars exceeds --max-chars "
+                  f"{args.max_chars:,}; training on the first {args.max_chars:,} only. "
+                  f"Raise --max-chars if this is unintended (it was, once: 2026-11-08).", flush=True)
+        text = raw[: args.max_chars]
+        ids_all = tok(text, return_tensors="pt")["input_ids"][0]
+        if args.sft:
+            # v2: v1's single fixed generic prompt collapsed instruction-following
+            # (chat-mode board 2026-11-10: sft arm emitted corpus-style counting with
+            # perfect eos discipline but scored 0 everywhere - it learned "any user
+            # turn = continue text", never learning to read the user content).
+            # v2 alternates examples: generic prompts (6 rotations) / paired
+            # continuation (user turn carries the first K tokens of the content as
+            # text, assistant completes it - forces reading the user message).
+            im_end = tok("<|im_end|>", add_special_tokens=False)["input_ids"]
+            assert len(im_end) == 1, f"im_end not a single token: {im_end}"
+            SFT_GENERIC = ["Continue the following text in the same style.",
+                           "Write the next part of this text.",
+                           "Continue writing the document.",
+                           "Provide the continuation of this passage.",
+                           "Complete the following text.",
+                           "Extend this writing naturally."]
+            B = args.ctx - 130          # content block tokens (fits any prefix <= 99)
+            K = 32                      # paired-example user-context tokens
+            ids_rows, lab_rows = [], []
+            for bi in range(ids_all.shape[0] // B):
+                block = ids_all[bi * B: (bi + 1) * B]
+                if bi % 2:               # paired continuation: read the user turn
+                    user_text = tok.decode(block[:K])
+                    content = block[K:]
+                else:                    # generic prompt, rotated
+                    user_text = SFT_GENERIC[bi // 2 % len(SFT_GENERIC)]
+                    content = block
+                prompt_str = tok.apply_chat_template(
+                    [{"role": "user", "content": user_text}],
+                    tokenize=False, add_generation_prompt=True)
+                prefix = tok(prompt_str, add_special_tokens=False)["input_ids"]
+                ex = list(prefix) + list(content) + list(im_end)
+                lab = [-100] * len(prefix) + list(content) + list(im_end)
+                if len(ex) > args.ctx:            # rare long-prefix edge: truncate
+                    ex, lab = ex[:args.ctx], lab[:args.ctx]
+                pad = args.ctx - len(ex)          # causal mask ignores the pad tail
+                ids_rows.append(ex + im_end * pad)
+                lab_rows.append(lab + [-100] * pad)
+            ids = torch.tensor(ids_rows)
+            labels = torch.tensor(lab_rows)
+            print(f"[recover-gpu] SFT v2: {ids.shape[0]} examples (half paired K={K}), "
+                  f"block {B} tok; example[0]: {repr(tok.decode(ids[0])[:220])}", flush=True)
+        else:
+            seq = (ids_all.shape[0] // args.ctx) * args.ctx
+            ids = ids_all[:seq].view(-1, args.ctx)
+            labels = None
+        n_chunks = ids.shape[0]
+        steps_per_epoch = n_chunks // (args.batch * args.accum)
+        total_steps = int(steps_per_epoch * args.epochs)
+        print(f"[recover-gpu] {n_chunks} chunks x {args.ctx} tok; "
+              f"{steps_per_epoch} steps/epoch; {total_steps} steps total", flush=True)
 
-    ts = torch.tensor(list(model.get_input_embeddings().weight.shape))
     opt = AdamW8bit([p for p in model.parameters() if p.requires_grad],
                     lr=args.lr, weight_decay=0.0)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(total_steps, 1))
@@ -171,19 +217,43 @@ def main():
     log_every = max(1, total_steps // 20)
     losses = []
     model.train()
+    # dataset mode: per-epoch-shuffled visit order, per-batch collation
+    # (variable lengths, padding trailing - causal attn ignores the pad tail)
+    order = []
+    if args.sft_dataset:
+        m = torch.tensor([len(e[0]) for e in examples])
+        pad_id = examples[0][0][-1].item()   # im_end as pad; positions masked
+        for _ in range(int(args.epochs) + 1):
+            order += torch.randperm(len(examples)).tolist()
     for step in range(total_steps):
-        s = (step * args.batch) % n_chunks
-        xb = ids[s: s + args.batch].to(model.device)
-        logits = model(input_ids=xb).logits
-        if labels is not None:  # SFT: completion-only loss over assistant tokens
-            yb = labels[s: s + args.batch].to(model.device)
+        if args.sft_dataset:
+            sel = order[step * args.batch: (step + 1) * args.batch]
+            L = max(len(examples[i][0]) for i in sel)
+            xb = torch.stack([
+                torch.cat([examples[i][0],
+                           examples[i][0].new_full((L - len(examples[i][0]),), pad_id)])
+                for i in sel]).to(model.device)
+            yb = torch.stack([
+                torch.cat([examples[i][1],
+                           examples[i][1].new_full((L - len(examples[i][1]),), -100)])
+                for i in sel]).to(model.device)
+            logits = model(input_ids=xb).logits
             loss = torch.nn.functional.cross_entropy(
                 logits[:, :-1].reshape(-1, logits.shape[-1]),
                 yb[:, 1:].reshape(-1), ignore_index=-100)
         else:
-            loss = torch.nn.functional.cross_entropy(
-                logits[:, :-1].reshape(-1, logits.shape[-1]),
-                xb[:, 1:].reshape(-1))
+            s = (step * args.batch) % n_chunks
+            xb = ids[s: s + args.batch].to(model.device)
+            logits = model(input_ids=xb).logits
+            if labels is not None:  # SFT v2: completion-only loss on assistant tokens
+                yb = labels[s: s + args.batch].to(model.device)
+                loss = torch.nn.functional.cross_entropy(
+                    logits[:, :-1].reshape(-1, logits.shape[-1]),
+                    yb[:, 1:].reshape(-1), ignore_index=-100)
+            else:
+                loss = torch.nn.functional.cross_entropy(
+                    logits[:, :-1].reshape(-1, logits.shape[-1]),
+                    xb[:, 1:].reshape(-1))
         (loss / args.accum).backward()
         losses.append(loss.item())
         tokens_seen += xb.numel()
@@ -221,7 +291,8 @@ def main():
             "hf_dir": str(args.hf_dir), "corpus": str(args.corpus),
             "params": {"epochs": args.epochs, "ctx": args.ctx, "batch": args.batch,
                    "lora_r": args.lora_r, "lr": args.lr},
-            "format": ("sft-chat-v2" if args.sft else "raw-completion"),
+            "format": ("sft-chat-v3" if args.sft_dataset else
+                "sft-chat-v2" if args.sft else "raw-completion"),
         "loss_first": losses[0], "loss_last20_avg": sum(losses[-20:]) / min(20, len(losses)),
         "tokens_seen": tokens_seen, "train_tok_per_s": tokens_seen / wall,
         "wall_seconds": wall, "hf_recovered": str(hf_out),
