@@ -43,8 +43,9 @@ fixes recorded in design §0j.
 
 - [x] drop2-ranked-fused recipe: `fuse_pairs` verified no-op — op removed from all three
       `-fused` recipes with a provenance note; ops now raise on requested-fusion no-ops
-- [ ] NF4→bf16 merge-shift test (adapter-on-NF4 PPL vs merged-bf16 PPL) — queued behind the
-      plateau rerun (if the rerun moves the floor, the shift explanation is moot)
+- [ ] NF4→bf16 merge-shift test (adapter-on-NF4 PPL vs merged-bf16 PPL) — NOW TOP OF THE
+      REPAIR QUEUE: the plateau rerun didn't move fineweb, so the wall is either the 4-bit
+      training substrate (merge shift) or dose (next: 2×-epoch striped arm)
 - [x] Diet-build audit: mixed.train.txt is a plain concatenation (code→fineweb→wiki,
       round-2 finding 2 settled it); recover_gpu now shuffles per epoch and samples the
       `--max-chars` cap across the whole file (striped)
@@ -62,7 +63,9 @@ Full detail + ordered fix plan in `docs/issues/2026_11_11_review_findings_round2
 Fixes + fired experiments recorded in design §0j.
 
 - [x] LoRA targets miss all `linear_attn.*` projections (22/30 layers) — added (+51%
-      trainable params); r16@1e-4 rerun IN FLIGHT on the 5080 (`drop2-repair-r2fix-lr1e4`)
+      trainable params); r16@1e-4 rerun LANDED (design §0j): fineweb plateau did NOT move
+      (12.72 vs 12.34; mixer-coverage hypothesis dead) — wikitext/code deltas were diet
+      composition (striped cap). Substrate/dose hypothesis survives test 1
 - [x] Per-epoch shuffle + whole-file striped cap sampling in the trainer. [ ] Interleaving
       diet builder still to commit (diet re-runs depend on it)
 - [x] Layer scorer off-by-one fixed (cos(in_i, out_i), 10-window average); [ ] re-score
@@ -139,10 +142,10 @@ keeps surgery + build + eval. Issue docs: `2026_11_07_llamacpp_cpu_finetune.md`,
 - [x] GPU recovery worker: `surgery/recover_gpu.py` — QLoRA trainer + merge + calibrate modes;
       first full cycle done 2026-11-08 (design §0c): drop2 PPL 12.82 -> 8.16, 2270 tok/s at
       3.9 GiB, desktop-usable. Checkpoint/resume wired for pausable runs.
-- [x→in flight] Plateau rerun (r16@1e-4 + linear-attn mixer targets + striped diet,
-      `~/forge-gpu/drop2-repair-r2fix-lr1e4`) — answers whether the §0f fineweb plateau
-      was "QLoRA-substrate-bound" or just 22/30 layers' mixers never being repaired;
-      if it stands, run the NF4→bf16 merge-shift test next
+- [x] Plateau rerun LANDED (`~/forge-gpu/drop2-repair-r2fix-lr1e4`, box:
+      `~/m0/runs/drop2-repair-r2fix-lr1e4/` incl. Q4_K_M GGUF): fineweb plateau stands —
+      mixer repair changed nothing there; wiki/code moves were diet composition. §0j has
+      the verdict + the 3-corpus row
 - [ ] Next repair experiment: diverse repair data (SFT mixture vs fineweb-edu — Gemma's
       candidates) evaluated over *multiple* corpora to separate domain adaptation from true
       repair (§0c caveat #2) ⬜

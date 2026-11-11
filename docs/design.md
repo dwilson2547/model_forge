@@ -662,11 +662,27 @@ and the two decisive experiments were fired before the rest:
 
 **Experiments fired:**
 
-- **The plateau rerun** (desktop 5080, `~/forge-gpu/drop2-repair-r2fix-lr1e4`): r16@1e-4 on
-  drop2, 2 epochs, 12M-char striped mixed diet — the same arm as the §0f "plateau"
-  evidence, re-run with mixer targets + shuffle. If the fineweb floor moves materially
-  below the old +1.8 plateau, the "QLoRA-substrate-bound" conclusion was premature (the
-  mixers never got repaired); if it stands, the NF4→bf16 merge-shift test is next.
+- **The plateau rerun — LANDED 2026-11-11 ~03:10 (50 min train + floor eval):
+  the plateau stands.** r16@1e-4 on drop2, 2 epochs, 6.14M tokens, 12M-char striped
+  mixed diet, fixed targets (mixers included, trainable 30.4M); floor on Q4_K_M:
+
+  | drop2 arm (Q4_K_M floor) | wikitext | fineweb | code |
+  |---|---:|---:|---:|
+  | base (unsliced, f16) | 9.33 | 10.44 | 3.17 |
+  | unrepaired | 12.82 | 13.55 | 3.57 |
+  | old lr1e4 (codefw head-cap diet) | 9.97 | 12.34 | 3.28 |
+  | **r2fix (striped diet + mixer targets)** | **8.66** | **12.72** | **3.63** |
+
+  Reading: **fineweb did not move** (12.72 vs 12.34, both ≈ the old +1.9–2.3 plateau over
+  base's 10.44; mixfull's 12.39 sat at the same wall). Repairing the 22 unrepaired
+  linear-attention mixers does **not** unlock more fineweb healing — the mixer-coverage
+  hypothesis is dead and "QLoRA-substrate/dose-bound" survives its first test. wikitext
+  8.66 and code 3.63 are diet-composition effects, not quality moves: the striped cap
+  puts wiki into the diet (wikitext healed past base) and code's share fell 39%→12%
+  (code regressed toward unrepaired) — §0d's diets-fingerprint-domains, confirmed.
+  Caveat per review r2 f9: single seed; the ±0.1-class noise band doesn't change the
+  direction. **Next on this thread: the NF4→bf16 merge-shift test** (is the wall the
+  4-bit training substrate or the merge?), then dose (a 2× epoch arm on the striped diet).
 - **The 27B do-nothing baseline** (Altra, `~/m0/baseline-27b/`): imatrix from the Q8_0 →
   IQ3_M / IQ3_XS / Q3_K_M quants, sizes + three-corpus PPL floor. If an unsliced 27B at
   3-bit sits in the 5080-comfort band (~≤12.5 GiB), every sliced+repaired 27B candidate
