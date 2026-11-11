@@ -396,6 +396,50 @@ process and infrastructure familiarity (bake the ontology, not the file contents
 the triage bots are context-starved and the bundle already carries the case-specific
 evidence.
 
+## 0i. SFT v3 — triage corpus + think-close 2026-11-11 ✅ (the arc closes)
+
+v2 post-mortem (LM Studio: "Thought for a moment then died" on the triage prompt) led to
+two root causes: (a) the chat template AUTO-OPENS the think block on generation, and
+v1/v2's targets never contained a close — so the model's entire output was structurally
+trapped in the thinking region; (b) the paired-continuation diet overgeneralized to
+"long document = continue it" for instruction-shaped prompts.
+
+**v3 diet** (`surgery/corpus_triage.py`, data homelab-private): the real incident-operator
+history pulled from Postgres — 68 completed turns across 3 session protocols (phase-1
+prose triage, JSON investigation, remediation advice) flattened to {user, reasoning,
+answer} records; 13 runbooks + 17 operations + primer as knowledge pairs; v2-style
+continuation pairs kept as the repair floor. 3416 examples at ctx 6144 (real 4-6k
+bundles train whole), r16 @ 1e-4, 2 epochs, 20 min on the 5080. Targets rendered through
+the template's own `reasoning_content` path so think-open/close is byte-native: the model
+learns to CLOSE thinking then answer.
+
+| arm | coding | instruct | needle | composite | q/GiB |
+|---|---:|---:|---:|---:|---:|
+| base | 1.0 | 0.6 | 1.0 | 0.867 | 0.110 |
+| drop2 (unrepaired) | 1.0 | 0.2 | 1.0 | 0.733 | 0.114 |
+| sftrep v2 | 0.0 | 0.0 | 1.0 | 0.333 | 0.044 |
+| **sftrep v3** | 1.0 | 0.2 | 1.0 | **0.733** | 0.096 |
+
+sftrep3 is the first repaired arm to fully match the drop2/codefw composite line, with a
+perfect coding tier (4/4 docker-graded) and the format discipline intact (clean eos, no
+limit-rambles). Remaining gap to base: instruct precision (constraint adherence) — the
+known v3-diet next step.
+
+**Held-out incident test (incident 46, never trained on):** fed the real bundle in chat
+mode → clean eos at 635 tokens, answer in the visible region, structured JSON in the
+operator's exact schema (action/findings/evidence_refs), and a CAUSALLY CORRECT diagnosis:
+rclone OOMKilled at 4Gi from on-disk-sorting of the 200k-entry part-images directory. The
+model generalized from 30 similar incidents + runbooks rather than echoing a memorized
+case — the triage-bots premise has its first positive data point.
+
+Artifacts: sftrep3 f16+Q4_K_M in `~/m0/lmstudio-out/sftrep3/` (MTP-grafted); LM Studio
+copy `model-forge/qwen35-4b-drop2-sftv3-triage/`; runs `~/forge-gpu/drop2-repair-sft3`;
+extractor + holdout under `~/forge-gpu/data/sft-v3-*` (local only).
+
+TODO upshot: incident-triage benchmark corpus now EXISTS (the holdout file), the
+workspace-SFT control experiment (0h) has its first arm trained, and v3-diet
+constraint examples remain the next quality knob.
+
 ## 1. Purpose
 
 Turn the Ampere Altra box into a **model-making node**: fire a job like *"shrink Qwen3.8-27B enough
