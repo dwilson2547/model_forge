@@ -802,6 +802,32 @@ Escalations that remain, in rough cost order: (1) change the wound — corrected
 and route around it (task-level repair via the SFT line already proved 0.73 composite
 at v3); (3) full-weight repair — still out of reach locally (~27 GiB optimizer for bf16).
 
+### 0j.4 — 27B do-noting baseline (in flight 2026-11-11): IQ3_M row landed; two gotchas
+
+Landed so far (three-corpus floor, box `~/m0/baseline-27b/`):
+
+| 27B variant | size | wikitext | fineweb | code |
+|---|---:|---:|---:|---:|
+| Q8_0 (near-lossless reference) | 27 GiB | 5.89 | 8.36 | 2.50 |
+| UD-Q4_K_M (unsloth dynamic) | 15.3 GiB | 5.92 | 8.45 | 2.52 |
+| IQ3_M (imatrix, Q8_0-requant) | 11.9 GiB | 6.17 | 8.74 | 2.56 |
+
+Early read: the do-nothing hypothesis is live — unsliced 27B at 3-bit IQ3_M sits in the
+5080-comfort size band with wiki +0.28 / fw +0.38 / code +0.06 over the Q8 reference,
+i.e. modest damage at 11.9 GiB. Every sliced+repaired 27B candidate must beat this.
+
+Gotchas recorded while the BF16-source chain finishes:
+1. **The 1.2M-char imatrix corpus under-covers the model**: llama-quantize refuses
+   IQ3_XS with "Missing importance matrix for blk.64.attn_k.weight" (the last chunks
+   of the mix presumably didn't complete for the tail tensors). The BF16 imatrix runs
+   over the same file — if its coverage is similarly short, srcbf16-IQ3_XS will fail
+   the same way; remediation is a longer imatrix pass.
+2. **The Q8-requant driver masked its own failures** (`| tail` without pipefail, the
+   same footgun that bit the stub-quants — pipefail was added to the bf16 driver but
+   not back-ported to 27b-baseline-driver.sh). Q3_K_M requantized in an implausible
+   40s and left an invalid-magic file. The Q8-derived Q3_K_M/IQ3_XS rows are dropped;
+   the BF16 chain provides the honest versions (and Q3_K_M needs no imatrix at all).
+
 ## 5. Milestones
 
 Tracked in [`TODO.md`](../TODO.md); summary:
