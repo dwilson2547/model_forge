@@ -688,13 +688,30 @@ and the two decisive experiments were fired before the rest:
      unrepaired at 3.63 — code share collapsed). Fineweb moved +0.5 vs the true 1e-4
      comparator (12.72 vs 12.22, Q4-vs-f16 confounded), which is not a breakthrough but
      also not clean flatness — attribution unknown.
-  3. **Isolating run queued (50 min): striped diet + CLASSIC target list** (old
-     q/k/v/o+MLP only), same lr/epochs/ctx/batch, `--seed` newly added to the trainer
-     so diet sampling + epoch shuffle are repeatable (r2fix ran unseeded — shuffle noise
-     rides on both arms). Both arms then compared on the Q4_K_M floor. Within ~0.1 on
-     fineweb ⇒ mixer-coverage hypothesis genuinely dead and the NF4→bf16 merge-shift
-     test is next; a mixer gain of the same order as the diet confound ⇒ levers
-     re-prioritized. Until that lands: **inconclusive**, not dead.
+  3. **Isolation run LANDED 2026-11-11 (both arms fresh, seed 1234, identical striped
+     diet draw + epoch shuffles; only the target list differs): the mixer-coverage
+     hypothesis is DEAD.** Floors (f16 and Q4_K_M, multicorpus):
+
+     | iso arm (seed 1234, striped diet) | f16 wiki / fw / code | Q4 wiki / fw / code |
+     |---|---|---|
+     | classic targets (no mixers) | 8.365 / **12.104** / 3.507 | 8.566 / 12.452 / 3.556 |
+     | all targets (mixers) | 8.359 / 12.221 / 3.509 | 8.565 / 12.448 / 3.566 |
+
+     Readings: (a) **no fineweb gain from repairing the mixers** - matched-precision
+     fineweb favors classic slightly (12.104 vs 12.221 f16, at the noise band); wiki/code
+     dead even at both precisions. Repairing 22 extra layers' token mixers buys nothing
+     on the PPL floor at this dose. (b) **Quant penalty measured directly**: Q4_K_M costs
+     ~= +0.20 wikitext / +0.35 fineweb / +0.05 code, identical for both arms - explains
+     the r2fix-vs-old-arm Q4/f16 mismatch in the first table above. (c) **Seed noise
+     measured**: r2fix (unseeded, else-identical to iso-all) hit 12.72 vs iso-all's
+     12.45 on Q4 fineweb - roughly +-0.27 run-to-run shuffle noise on this diet;
+     single-arm fineweb deltas under ~0.3 are not evidence. (d) The wall is robust:
+     12.1-12.5 across codefw-head, striped, classic, all, mixed - every diet/target
+     combination lands in the same band ~+1.7-2.0 over base 10.44.
+     Decisions: the trainer keeps the `all` default (no downside at Q4; task-level
+     mixer-coverage effects on the triage SFT line remain unmeasured - the flag exists
+     for either); **the NF4->bf16 merge-shift test is now top of the repair queue**,
+     with the dose arm (2x epochs) behind it.
 - **The 27B do-nothing baseline** (Altra, `~/m0/baseline-27b/`): imatrix from the Q8_0 →
   IQ3_M / IQ3_XS / Q3_K_M quants, sizes + three-corpus PPL floor. If an unsliced 27B at
   3-bit sits in the 5080-comfort band (~≤12.5 GiB), every sliced+repaired 27B candidate
