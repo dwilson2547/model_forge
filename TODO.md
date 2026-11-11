@@ -27,9 +27,12 @@ Loop validated end-to-end on Qwen3.5-4B; measured the first quality cliff: drop8
       retired for qwen3_5, recovery critical path, 27B confirmed same hybrid arch
 - [ ] FFN importance scoring v2 (activation-aware, not norm-only); width cuts stay off the
       menu until it passes a re-test at 0.85–0.95
-- [ ] Layer scoring v2: spatial-spread constraint (picks band-cluster in the 12–28 region even
-      with min_gap=2) or activation-aware BlockInfluence; re-run the 2/4/6 gradient against
-      the per-layer scores now recorded in each run's results.json
+- [x→mostly] Layer scoring v2: BlockInfluence form cos(in_i, out_i) over 10 windows landed
+      2026-11-11 (review r2 f3 + r1 f5); re-score of the 4B IN FLIGHT on the box
+      (~/m0/runs/rescore-4b/, driver committed as surgery/rescore.py). Remaining after it
+      lands: compare pick sets vs [24,28] / [12,24,26,28]; then decide whether the
+      spatial-spread constraint is still needed (band-clustering may have been the
+      scorer bug, not the architecture)
 - [ ] (bookkeeping) AML pytorch images are torch 1.12.1 — dead end for Qwen3.x stack decisions;
       stock torch 2.x it is, per M1's forge_env (torch 2.15.0 works fine on the box)
 
@@ -69,7 +72,7 @@ Fixes + fired experiments recorded in design §0j.
 - [ ] Chat grading: grade `content` only (no reasoning fallback), last fence for code —
       regrade §0h board if raw generations survive, else on next run
 - [ ] Loop metric: per-temp loop rate over seeds; §0g wording fix
-- [ ] KL-divergence vs base in the floor tier (llama-perplexity --kl-divergence)
+- [ ] KL-divergence vs base in the floor tier (tracked in M2 above)
 - [x→in flight] Baseline row: unsliced 27B imatrix IQ3_M/IQ3_XS/Q3_K_M vs the 12.5 GiB
       target (Altra job `~/m0/baseline-27b/`, imatrix → quants → 3-corpus floor)
 - [ ] Seed replicate of the kept repair arm; rsLoRA/fixed-α rank re-probe (repeat the
@@ -82,6 +85,13 @@ Fixes + fired experiments recorded in design §0j.
 ## M2 — benchmark suite
 
 - [ ] Floor tier: wikitext-2 + fineweb-sample perplexity runner
+- [ ] D2 tier (review r2 f9 — the current 12-item board moves in 0.25 steps and cannot
+      resolve small gaps): coding subset through the existing Docker sandbox
+      (MBPP/HumanEval-style, >=50–100 items, disjoint from any training corpus — r2 f8
+      warns code.train and code.test are both llama.cpp), and an IFEval-style instruct
+      set at the same scale; fixed seeds, greedy decoding
+- [ ] KLD row in the floor (llama-perplexity --kl-divergence-base on base, --kl-divergence
+      on candidates): distance-from-base that domain adaptation can't game
 - [ ] Incident-triage benchmark task (proof-of-concept 2026-11-08, LM Studio): candidate models
       analyze historical incident-operator reports (incident 46 = first sample: correct
       schema, correct checks, connected findings, 18k ctx) and are graded on JSON schema
@@ -94,7 +104,8 @@ Fixes + fired experiments recorded in design §0j.
 - [ ] Instruct checklist + long-context needle tasks; fixed seeds, greedy decoding
 - [ ] Metric pack: quality composite, tok/s, TTFT, RSS, size, quality-per-GB
 
-## M3 — funnel + orchestration
+## M3 — funnel + orchestration — HOLD per review r2 f10 until r2 f5/f6/f9 land: the
+12-item bench just ranks noise faster
 
 - [ ] Config-grid builder (request → recipe set with time/disk bounds)
 - [ ] `forge` CLI + worker, SQLite jobs table (gpu-scheduler shape), `runs/` artifacts + GC
@@ -128,9 +139,17 @@ keeps surgery + build + eval. Issue docs: `2026_11_07_llamacpp_cpu_finetune.md`,
 - [x] GPU recovery worker: `surgery/recover_gpu.py` — QLoRA trainer + merge + calibrate modes;
       first full cycle done 2026-11-08 (design §0c): drop2 PPL 12.82 -> 8.16, 2270 tok/s at
       3.9 GiB, desktop-usable. Checkpoint/resume wired for pausable runs.
+- [x→in flight] Plateau rerun (r16@1e-4 + linear-attn mixer targets + striped diet,
+      `~/forge-gpu/drop2-repair-r2fix-lr1e4`) — answers whether the §0f fineweb plateau
+      was "QLoRA-substrate-bound" or just 22/30 layers' mixers never being repaired;
+      if it stands, run the NF4→bf16 merge-shift test next
 - [ ] Next repair experiment: diverse repair data (SFT mixture vs fineweb-edu — Gemma's
       candidates) evaluated over *multiple* corpora to separate domain adaptation from true
       repair (§0c caveat #2) ⬜
+- [ ] Gotcha bank (design §0j, discovered 2026-11-11): bnb packs `in_proj_a/b` (32-row
+      linears — NOT skipped by default); a post-load bf16 cast of packed Params4bit
+      corrupts bytes, use `llm_int8_skip_modules`; that list must also carry `lm_head` or
+      it loads as an unpacked Linear4bit that asserts on forward
 - [ ] ctx-1024 repair arm (same codefw diet, ctx 512→1024): **demoted to secondary** by the
       long-window floor (§0e: wound does not widen at range; repair holds to 32k)
 - [x] SFT mode in recover_gpu: DONE (v1+v2, 00a70h) - v3 next: constraint-bearing diet (exact-count/format examples) + clean code files; also fix stray fences in code output
