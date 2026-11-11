@@ -48,6 +48,24 @@ Full detail in `docs/issues/2026_11_10_external_review_findings.md`. All six ver
 - [ ] Minor: `--save-every 0` NameError; dead `ts` line in recover_gpu
 
 
+## Review round 2 follow-ups (Claude, 2026-11-11 — planned for the next model)
+
+Full detail + ordered fix plan in `docs/issues/2026_11_11_review_findings_round2.md`.
+Resolves prior review #3 (diet IS source-concatenated: code → fineweb → wiki).
+
+- [ ] LoRA targets miss all `linear_attn.*` projections (22/30 layers) — add them, re-run r16@1e-4
+- [ ] Per-epoch shuffle + whole-file cap sampling; commit an interleaving diet builder
+- [ ] Layer scorer off-by-one: `cos(out[i-1], out[i+1])` scores layers i+i+1 → `cos(out[i-1], out[i])`
+- [ ] v3 SFT pre-flight: ctx ≥2048, drop truncated targets, per-kind skip counts, correctness gate,
+      holdout by alert family
+- [ ] Chat grading: grade `content` only (no reasoning fallback), last fence for code
+- [ ] Loop metric: per-temp loop rate over seeds; fix §0g "loops at every temperature" wording
+- [ ] KL-divergence vs base in the floor tier
+- [ ] Baseline row: unsliced 27B imatrix IQ3/Q3 quant vs the 12.5 GiB target
+- [ ] Seed replicate of the kept repair arm; rsLoRA/fixed-α rank re-probe
+- [ ] `prune_heads` broken under `attn_output_gate` (q_proj 2× rows) — fix or fail loudly
+- [ ] Docs: arch is 32 layers (24 linear + 8 full), not 36; stale status headers; duplicate §0d
+
 ## M2 — benchmark suite
 
 - [ ] Floor tier: wikitext-2 + fineweb-sample perplexity runner
