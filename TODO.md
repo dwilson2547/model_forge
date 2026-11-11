@@ -49,7 +49,11 @@ fixes recorded in design §0j.
 - [x] NF4→bf16 merge-shift test LANDED (design §0j.2): merged-bf16 is BETTER than
       NF4+adapter on every corpus (shift −0.19/−0.27/−0.15) — the merge is not the wall;
       the 4-bit substrate behaves as a mild regularizer, costing nothing in the shipped
-      artifact. Dose arm (2× epochs striped, seed 1234) fired as the last cheap lever
+      artifact. Dose arm LANDED (§0j.3): 4 epochs OVERFITS — fineweb 15.64 vs
+      unrepaired 13.55; worse than no repair. Dose joins the dead levers (mixer,
+      merge, rank, lr, diet); 2-epoch recipe is the peak. Wall verdict: genuine
+      surgical damage rank-16 LoRA can't relearn. Escalations: wound change ([25,29]),
+      route around via SFT line, or full-weight repair (out of reach locally)
 - [x] Diet-build audit: mixed.train.txt is a plain concatenation (code→fineweb→wiki,
       round-2 finding 2 settled it); recover_gpu now shuffles per epoch and samples the
       `--max-chars` cap across the whole file (striped)

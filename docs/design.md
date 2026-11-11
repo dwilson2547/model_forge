@@ -775,6 +775,32 @@ Remaining candidates for the ~+1.7–2.0 fineweb wall after mixer (dead), merge-
 **dose** (2×-epoch arm fired) and genuine irreparable damage (wound carried in ranks
 QLoRA can't relearn — full-weight repair remains out of reach locally).
 
+### 0j.3 — Dose arm (landed 2026-11-11): the last cheap lever on the wall is dead
+
+4 epochs (2x the iso arms: seed 1234, all targets, striped diet — everything identical),
+10.76M tokens, train loss fine (last20 1.714 vs 2.625 first — same first batch as the
+iso arms, protocol held), and the floor collapses into an overfit signature:
+
+| drop2 arm | wikitext | fineweb | code |
+|---|---:|---:|---:|
+| base (f16) | 9.33 | 10.44 | 3.17 |
+| unrepaired | 12.82 | 13.55 | 3.57 |
+| 2-epoch arms (iso pair, Q4) | 8.57 | 12.45 | 3.56 |
+| **4-epoch dose arm (Q4_K_M)** | **10.44** | **15.64** | **4.19** |
+
+Fineweb 15.64 is WORSE THAN THE UNREPAIRED WOUND (13.55); code 4.19 likewise. Training
+loss improved while held-out PPL exploded — textbook noise-fit on a 12M-char corpus at
+low LR. Dose joins the dead levers: **mixer coverage, merge shift, rank, lr, diet,
+dose** — every knob that can be reached at this LoRA scale is now measured flat or
+harmful, and the 2-epoch recipe sits at the peak.
+
+Standing verdict for the ~+1.7–2.0 fineweb wall at drop2/r16 scale: **genuine surgical
+damage that rank-16 residual adapters cannot relearn from a 512-ctx LM objective.**
+Escalations that remain, in rough cost order: (1) change the wound — corrected pick
+[25,29] (the §0j.1 scorer result) may simply be a smaller wound; (2) accept the plateau
+and route around it (task-level repair via the SFT line already proved 0.73 composite
+at v3); (3) full-weight repair — still out of reach locally (~27 GiB optimizer for bf16).
+
 ## 5. Milestones
 
 Tracked in [`TODO.md`](../TODO.md); summary:
