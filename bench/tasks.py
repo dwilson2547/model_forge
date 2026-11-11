@@ -263,6 +263,16 @@ def run_task(server, task, chat=False):
     budget = 2048 if task["group"] == "coding" else task.get("max_tokens", 256)
     if chat:
         resp = server.chat(task["prompt"], max_tokens=budget)
+        if task["group"] == "instruct":
+            # Chat-mode thinking is elaborate planning (hundreds of tokens) and
+            # PRECEDES the answer; at 256 the answer never arrives (stop=limit).
+            resp = server.chat(task["prompt"], max_tokens=1024)
+        if task["group"] != "coding":
+            # The server already separated thinking from answer: grade the answer
+            # part when it exists (raw _answer_part() expects thinking-TAILS).
+            c = (resp.get("content") or "").strip()
+            if c:
+                resp = dict(resp, text=resp["content"])
     else:
         resp = server.completion(task["prompt"], max_tokens=budget)
     if task["group"] == "coding":

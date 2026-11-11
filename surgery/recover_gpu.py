@@ -108,33 +108,49 @@ def main():
               f"{args.max_chars:,}; training on the first {args.max_chars:,} only. "
               f"Raise --max-chars if this is unintended (it was, once: 2026-11-08).", flush=True)
     text = raw[: args.max_chars]
-    ids_all = tok(text, return_tensors="pt")[ "input_ids" ][0]
+    ids_all = tok(text, return_tensors="pt")["input_ids"][0]
     if args.sft:
-        # One fixed generic user turn for every example (format anchoring; the assistant
-        # content carries the repair signal). Slicing token ids directly avoids any
-        # decode/re-encode boundary drift vs. the raw-mode diet.
-        SFT_USER_PROMPT = "Continue the following text in the same style."
-        prompt_str = tok.apply_chat_template(
-            [{"role": "user", "content": SFT_USER_PROMPT}],
-            tokenize=False, add_generation_prompt=True)
-        prefix = tok(prompt_str, add_special_tokens=False)["input_ids"]
+        # v2: v1's single fixed generic prompt collapsed instruction-following
+        # (chat-mode board 2026-11-10: sft arm emitted corpus-style counting with
+        # perfect eos discipline but scored 0 everywhere - it learned "any user
+        # turn = continue text", never learning to read the user content).
+        # v2 alternates examples: generic prompts (6 rotations) / paired
+        # continuation (user turn carries the first K tokens of the content as
+        # text, assistant completes it - forces reading the user message).
         im_end = tok("<|im_end|>", add_special_tokens=False)["input_ids"]
         assert len(im_end) == 1, f"im_end not a single token: {im_end}"
-        P = len(prefix)
-        C = args.ctx - P - 1                     # content tokens per example
-        n_examples = ids_all.shape[0] // C
-        ids = torch.stack([
-            torch.cat([torch.tensor(prefix),
-                    ids_all[i * C: (i + 1) * C],
-                    torch.tensor(im_end)])
-            for i in range(n_examples)])
-        labels = ids.clone()
-        labels[:, :P] = -100                     # prompt tokens are not targets
-        print(f"[recover-gpu] SFT: prefix {P} tok + content {C} tok + im_end "
-              f"(eos {im_end[0]}); {n_examples} examples; "
-              f"loss on {C + 1}/{args.ctx} tokens/example", flush=True)
-        print(f"[recover-gpu] SFT example[0] decode: {repr(tok.decode(ids[0])[:300])}",
-              flush=True)
+        SFT_GENERIC = ["Continue the following text in the same style.",
+                       "Write the next part of this text.",
+                       "Continue writing the document.",
+                       "Provide the continuation of this passage.",
+                       "Complete the following text.",
+                       "Extend this writing naturally."]
+        B = args.ctx - 130          # content block tokens (fits any prefix <= 99)
+        K = 32                      # paired-example user-context tokens
+        ids_rows, lab_rows = [], []
+        for bi in range(ids_all.shape[0] // B):
+            block = ids_all[bi * B: (bi + 1) * B]
+            if bi % 2:               # paired continuation: read the user turn
+                user_text = tok.decode(block[:K])
+                content = block[K:]
+            else:                    # generic prompt, rotated
+                user_text = SFT_GENERIC[bi // 2 % len(SFT_GENERIC)]
+                content = block
+            prompt_str = tok.apply_chat_template(
+                [{"role": "user", "content": user_text}],
+                tokenize=False, add_generation_prompt=True)
+            prefix = tok(prompt_str, add_special_tokens=False)["input_ids"]
+            ex = list(prefix) + list(content) + list(im_end)
+            lab = [-100] * len(prefix) + list(content) + list(im_end)
+            if len(ex) > args.ctx:            # rare long-prefix edge: truncate
+                ex, lab = ex[:args.ctx], lab[:args.ctx]
+            pad = args.ctx - len(ex)          # causal mask ignores the pad tail
+            ids_rows.append(ex + im_end * pad)
+            lab_rows.append(lab + [-100] * pad)
+        ids = torch.tensor(ids_rows)
+        labels = torch.tensor(lab_rows)
+        print(f"[recover-gpu] SFT v2: {ids.shape[0]} examples (half paired K={K}), "
+              f"block {B} tok; example[0]: {repr(tok.decode(ids[0])[:220])}", flush=True)
     else:
         seq = (ids_all.shape[0] // args.ctx) * args.ctx
         ids = ids_all[:seq].view(-1, args.ctx)
@@ -205,7 +221,7 @@ def main():
             "hf_dir": str(args.hf_dir), "corpus": str(args.corpus),
             "params": {"epochs": args.epochs, "ctx": args.ctx, "batch": args.batch,
                    "lora_r": args.lora_r, "lr": args.lr},
-            "format": ("sft-chat" if args.sft else "raw-completion"),
+            "format": ("sft-chat-v2" if args.sft else "raw-completion"),
         "loss_first": losses[0], "loss_last20_avg": sum(losses[-20:]) / min(20, len(losses)),
         "tokens_seen": tokens_seen, "train_tok_per_s": tokens_seen / wall,
         "wall_seconds": wall, "hf_recovered": str(hf_out),

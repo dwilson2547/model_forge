@@ -91,10 +91,9 @@ class LlamaServer:
         choice = out["choices"][0]
         msg = choice["message"]
         # llama.cpp splits "thinking" into reasoning_content and can leave content
-        # EMPTY for models that think on every turn (this family does). Grade the
-        # full generation, in emission order — same semantics as raw completion.
+        # EMPTY for models that think on every turn (this family does).
         text = (msg.get("reasoning_content") or "") + (msg.get("content") or "")
-        return {"text": text,
+        return {"text": text, "content": msg.get("content") or "",
                 "stop_type": {"stop": "eos", "length": "limit"}.get(
                     choice.get("finish_reason"), choice.get("finish_reason")),
                 "tokens": out.get("usage", {}).get("completion_tokens", 0)}
