@@ -436,6 +436,21 @@ Artifacts: sftrep3 f16+Q4_K_M in `~/m0/lmstudio-out/sftrep3/` (MTP-grafted); LM 
 copy `model-forge/qwen35-4b-drop2-sftv3-triage/`; runs `~/forge-gpu/drop2-repair-sft3`;
 extractor + holdout under `~/forge-gpu/data/sft-v3-*` (local only).
 
+**Post-bench LM Studio session + DB verification (2026-11-11, user-driven):** side-chat
+probes revealed the fine-tune's boundary. Keyword-triggered protocol emission works
+("incident" + failure text -> triage JSON even outside a bundle); but with no real
+evidence the model CONFABULATED a log line ("No proxy access key found in request" —
+DB-verified: zero hits across the entire incident history), and schema drift appeared
+under freeform prompts ("action": "execute_code" is ReAct leakage, not operator vocab).
+Both failures are OOD-of-diet behaviors: v3's corpus was flattened to [user -> answer],
+DROPPING the pipeline's system prompts — which turn out to carry the curated
+"Environment facts (trust these over general knowledge)" block: the grounding layer the
+whole product runs on. The keyword reflex working at all is because user-turn tails
+(embedded check menus) carried enough protocol signal. v4 diet: (1) restore system
+prompts - full [system, user] records as submitted; (2) missing-evidence -> action:
+request refusal examples (never fabricate evidence slots); (3) constraint-bearing
+examples (remaining instruct gap).
+
 TODO upshot: incident-triage benchmark corpus now EXISTS (the holdout file), the
 workspace-SFT control experiment (0h) has its first arm trained, and v3-diet
 constraint examples remain the next quality knob.

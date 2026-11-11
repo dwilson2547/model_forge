@@ -130,3 +130,21 @@ keeps surgery + build + eval. Issue docs: `2026_11_07_llamacpp_cpu_finetune.md`,
 
 - [ ] franken-MoE: mergekit on aarch64 (fallback: own router-assembly script) ⬜
 - [ ] moeify recipe + recovery; llama.cpp MoE LoRA training feasibility ⬜
+
+## v4 SFT diet (planned 2026-11-11; user paused pending external review suggestions)
+
+Grounded in the post-v3 LM Studio session + DB verification (design 0i addendum):
+
+- [ ] extractor: keep FULL conversation prefixes - [system, user] as submitted by the
+      pipeline (v3 flattening dropped the system prompts, losing the "Environment
+      facts" grounding block); incident 46 holdout upgrades to system-included for free
+- [ ] diet: missing-evidence -> action:request refusal examples (empty evidence slots
+      get a check request, never a fabricated log line)
+- [ ] diet: constraint-bearing examples (exact counts/formats) for the last instruct
+      gap to base (0.2 vs 0.6)
+- [ ] regression probes: the four LM Studio session prompts (2x incident-keyword,
+      rotate-proxy Q, bare scrape-403) as fixtures - after v4: no fabricated evidence,
+      request-mode instead of done-with-hallucinated-refs, operator-vocab actions only
+- [ ] open question for review: with system prompts restored, does the model still
+      emit protocol JSON from bare user turns (LM Studio side-chat) or should there be
+      explicitly separate chat-mode vs triage-mode behaviors?
