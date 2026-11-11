@@ -335,6 +335,67 @@ Data: `bench-results.jsonl` on the Altra (first 5 rows = full board with metrics
 trailing 5 = coding-only rerun with `stop_type` + `text_preview`); logs `bench-full.log`
 and `bench-coding-rerun.log`.
 
+## 0h. SFT-format recovery arc — v1 collapse, chat-mode board, v2 2026-11-10 ✅ (late)
+
+The §0g prerequisite: SFT mode in recover_gpu (chat template + completion-only loss),
+tested on the same drop2 wound + mixed diet + r16@1e-4, benchmarked through the new
+`--chat` bench mode (`/v1/chat/completions`, the surface LM Studio actually uses).
+
+**Three harness artifacts, three passes — each caught by refusing to trust anomalous
+zeros and reading raw outputs instead.** (1) raw-mode coding budget starvation (§0g);
+(2) llama.cpp routes thinking into `message.reasoning_content` and left `content` empty
+for this family — the first full chat board scored graders on empty strings; we now grade
+the concatenated generation; (3) chat thinking PRECEDES the answer, so 256-token
+instruct budgets died mid-reasoning (base wrote the correct bullets inside its reasoning
+at step 5) — instruct budget is 1024 in chat, graders prefer the server-split answer part.
+
+**Assembled chat-mode board (coding+needle from the fixed board; instruct regraded):**
+
+| arm | coding | instruct | needle | composite | loop-thresh |
+|---|---:|---:|---:|---:|---:|
+| base | 1.0 | 0.6 | 1.0 | **0.867** | 0.7 |
+| drop2 (unrepaired) | 1.0 | 0.2 | 1.0 | **0.733** | 0.7 |
+| wikirep | 1.0 | 0.0 | 1.0 | **0.667** | 0.7 |
+| codefw | 1.0 | 0.2 | 1.0 | **0.733** | 0.7 |
+| mixfull | 0.583 | 0.2 | 1.0 | **0.594** | 0.7 |
+| sftrep v1 | 0.0 | 0.0 | 0.0 | **0.0** | 0.5 |
+| sftrep v2 | 0.0 | 0.0 | 1.0 | **0.333** | 0.7 |
+
+**Findings:**
+1. **SFT v1 (single fixed generic prompt) collapsed semantics while nailing format:**
+   it learned "any user turn = emit a corpus-style continuation" — a coding request came
+   back as `, 19, 20, 21, … 104,` with a perfectly clean eos. Perfect discipline, zero
+   instruction-following. Recovery-training format is NOT neutral: v1's data design
+   destroyed more behavior than the surgery did.
+2. **SFT v2 (rotated prompts + half paired continuation, user turn carries the opening
+   32 tokens) fixed the semantic collapse**: needle 0→1.0 (reads and answers questions,
+   on-topic), clean eos retained, loop-thresh 0.7. Remaining gaps: constraint precision
+   (writes correct-format bullets but ignores "exactly three" — wrote 8) and code-syntax
+   hygiene (real code-shaped output with stray fences and indentation damage). v3 diet
+   should add constraint-bearing examples + clean code files.
+3. **wikirep substantially recovers in chat mode** — the arm that emits `= = = =` garbage
+   in raw completions passed 4/4 coding through the chat template (verbosely, but
+   functionally). §0d's domain-trap collapse is partly a raw-mode-specific pathology.
+4. **The repair tax is most visible in chat-mode instruction-following** (base 0.6 vs
+   repaired 0.2), more than in coding/needle. The chat surface is where repair quality
+   should be judged going forward — it matches deployment.
+5. raw-vs-chat boards disagree enough ( wikirep coding 0→1.0, base coding 0.75→1.0 )
+   that task results must always carry their surface (`task_mode` in every row).
+
+Artifacts: sftrep2 f16 + Q4_K_M in `~/m0/lmstudio-out/sftrep2/` (LM Studio-droppable);
+GGUFs carry the MTP graft. Runs: `~/forge-gpu/drop2-repair-sft{,2}`; boards in
+`bench-results.jsonl` (`task_mode: chat`), logs `board-full.log`, `bench-instruct-rerun.log`,
+`sft2-pipeline.log`.
+
+ Standing next step: **workspace-corpus SFT experiment** (the "re-train an existing model
+instead of slicing" question): 3-arm control — unsliced-base+QLoRA vs drop2+repair+QLoRA
+(same budget: the never-run surgery-tax measurement) vs RAG, judged on the held-out
+incident-triage benchmark. Corpus weighting decided: knowledge layer (issues/postmortems/
+decisions/runbooks, incident-bundle→triage-JSON pairs) over code; goal is diagnostic
+process and infrastructure familiarity (bake the ontology, not the file contents), since
+the triage bots are context-starved and the bundle already carries the case-specific
+evidence.
+
 ## 1. Purpose
 
 Turn the Ampere Altra box into a **model-making node**: fire a job like *"shrink Qwen3.8-27B to a ~9B

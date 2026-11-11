@@ -102,7 +102,7 @@ keeps surgery + build + eval. Issue docs: `2026_11_07_llamacpp_cpu_finetune.md`,
       repair (§0c caveat #2) ⬜
 - [ ] ctx-1024 repair arm (same codefw diet, ctx 512→1024): **demoted to secondary** by the
       long-window floor (§0e: wound does not widen at range; repair holds to 32k)
-- [ ] SFT mode in recover_gpu: chat-template application + completion-only loss masking
+- [x] SFT mode in recover_gpu: DONE (v1+v2, 00a70h) - v3 next: constraint-bearing diet (exact-count/format examples) + clean code files; also fix stray fences in code output
       (raw-text trainer can't use instruction data) ⬜
 - [ ] Incumbent-domain SFT corpus (small, LoRA-sized): resolved incident-operator cases as
       (incident bundle → known-good triage JSON) pairs, plus scraper postmortems + runbooks
