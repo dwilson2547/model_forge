@@ -750,6 +750,31 @@ Scores on the top band (old | new): 12: .899 | .933, 13: .886 | .939, 21: .890 |
 No 27B drop decision until recipes re-derive picks through the fixed scorer
 (driver: `surgery/rescore.py`, committed; artifacts: `~/m0/runs/rescore-4b/`).
 
+### 0j.2 — NF4→bf16 merge-shift test (landed 2026-11-11): the merge is NOT the wall
+
+Round-1 review f2 hypothesis: the adapter optimizes against the noisy NF4 substrate;
+does merging it onto bf16 lose repair? Protocol: one evaluator (torch, GPU), identical
+ctx-512 x 24-chunk windows over the test corpora, comparing NF4-base+adapter (what
+training optimized) vs the merged-bf16 dir (what ships) for the iso-all arm
+(`surgery/merge_shift.py`, result at `~/forge-gpu/drop2-repair-iso-all/merge-shift.json`):
+
+| corpus | NF4+adapter | merged-bf16 | shift |
+|---|---:|---:|---:|
+| wikitext | 10.642 | 10.452 | **−0.189** |
+| fineweb | 14.530 | 14.257 | **−0.273** |
+| code | 4.314 | 4.166 | **−0.148** |
+
+(Absolute values are ~+2 over the llama.cpp floors — protocol differences (BOS/stride/
+CE convention); within-pair deltas are the result.) **The merged bf16 model is BETTER
+than the NF4+adapter substrate on every corpus.** The 4-bit substrate costs nothing in
+the shipped artifact — if anything it behaves as a mild regularizer during optimization
+and the merge removes it. The merge-shift explanation for the §0f plateau is dead.
+
+Remaining candidates for the ~+1.7–2.0 fineweb wall after mixer (dead), merge-shift
+(dead), rank (unimodal at r16), lr (unimodal at 1e-4), diet (combinatorially flat):
+**dose** (2×-epoch arm fired) and genuine irreparable damage (wound carried in ranks
+QLoRA can't relearn — full-weight repair remains out of reach locally).
+
 ## 5. Milestones
 
 Tracked in [`TODO.md`](../TODO.md); summary:

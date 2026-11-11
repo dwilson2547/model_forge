@@ -46,8 +46,10 @@ fixes recorded in design §0j.
       fineweb 12.104 vs 12.221 (f16): no mixer gain (slight classic edge), wiki/code
       even; quant penalty measured (+0.35 fw at Q4); seed noise measured (~±0.27 fw)
       — single sub-0.3 fineweb deltas are not evidence. Mixer-coverage hypothesis dead.
-- [ ] NF4→bf16 merge-shift test (adapter-on-NF4 PPL vs merged-bf16 PPL) — NOW TOP of
-      the repair queue (mixer verdict landed); dose arm (2× epochs striped) behind it
+- [x] NF4→bf16 merge-shift test LANDED (design §0j.2): merged-bf16 is BETTER than
+      NF4+adapter on every corpus (shift −0.19/−0.27/−0.15) — the merge is not the wall;
+      the 4-bit substrate behaves as a mild regularizer, costing nothing in the shipped
+      artifact. Dose arm (2× epochs striped, seed 1234) fired as the last cheap lever
 - [x] Diet-build audit: mixed.train.txt is a plain concatenation (code→fineweb→wiki,
       round-2 finding 2 settled it); recover_gpu now shuffles per epoch and samples the
       `--max-chars` cap across the whole file (striped)
