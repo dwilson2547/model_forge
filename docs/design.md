@@ -398,9 +398,19 @@ evidence.
 
 ## 1. Purpose
 
-Turn the Ampere Altra box into a **model-making node**: fire a job like *"shrink Qwen3.8-27B to a ~9B
-model"* and get back a ranked leaderboard of candidate models produced by different structural-surgery +
-quantization configs, benchmarked across task groups on the machine they will actually run on.
+Turn the Ampere Altra box into a **model-making node**: fire a job like *"shrink Qwen3.8-27B enough
+to run comfortably on the desktop 5080 (16 GB VRAM)"* and get back a ranked leaderboard of candidate
+models produced by different structural-surgery + quantization configs, benchmarked across task
+groups on the machine they will actually run on.
+
+> **Goal correction (2026-11-10, user):** the original "27B → ~9B" framing was
+> over-zealous. The real target is **Qwen3.8-27B stripped down to fit comfortably in
+> 16 GB VRAM**: weights at Q4_K_M ≤ ~12.5 GiB plus 2–4 GiB KV-cache/activation
+> headroom — i.e. roughly **~20–22B params** (slice ~4–8 of 64 layers, possibly plus
+> light width surgery), not a third of the model. The 5080 is the deployment node;
+> the hybrid's cheap KV cache (only every 4th layer grows with context) makes longer
+> contexts viable at that size. Old "~9B" mentions below should be read through this
+> correction — the deeper slices remain an option to *measure* on the way, not the goal.
 
 Three capabilities, one pipeline:
 

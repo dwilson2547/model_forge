@@ -79,7 +79,7 @@ Full detail in `docs/issues/2026_11_10_external_review_findings.md`. All six ver
       stage code: license check, card generation, secrets/infra-path sanitization, corpus-flag
       guard (local-only variants refuse), idempotent re-runs. Token on the box is now
       write-scoped.**
-- [ ] First real run: 27B → ~9B
+- [ ] First real run: Qwen3.8-27B → 5080-comfort (~20–22B params: Q4_K_M ≤ ~12.5 GiB + KV headroom in 16 GB VRAM; goal corrected 2026-11-10, see design §1 note)
 
 ## M4 — recovery
 
