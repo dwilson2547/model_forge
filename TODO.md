@@ -43,9 +43,11 @@ fixes recorded in design §0j.
 
 - [x] drop2-ranked-fused recipe: `fuse_pairs` verified no-op — op removed from all three
       `-fused` recipes with a provenance note; ops now raise on requested-fusion no-ops
-- [ ] NF4→bf16 merge-shift test (adapter-on-NF4 PPL vs merged-bf16 PPL) — NOW TOP OF THE
-      REPAIR QUEUE: the plateau rerun didn't move fineweb, so the wall is either the 4-bit
-      training substrate (merge shift) or dose (next: 2×-epoch striped arm)
+- [ ] Isolating run (TOP of the repair queue, ~50 min): striped diet + CLASSIC target
+      list, same seed/lr/epochs/ctx/batch as r2fix — isolates the mixer effect on the
+      Q4_K_M floor. Within ~0.1 on fineweb => mixer hypothesis dead;
+- [ ] NF4→bf16 merge-shift test (adapter-on-NF4 PPL vs merged-bf16 PPL) — ordered behind
+      the isolating run; don't build on the mixer verdict until it lands
 - [x] Diet-build audit: mixed.train.txt is a plain concatenation (code→fineweb→wiki,
       round-2 finding 2 settled it); recover_gpu now shuffles per epoch and samples the
       `--max-chars` cap across the whole file (striped)
@@ -63,9 +65,9 @@ Full detail + ordered fix plan in `docs/issues/2026_11_11_review_findings_round2
 Fixes + fired experiments recorded in design §0j.
 
 - [x] LoRA targets miss all `linear_attn.*` projections (22/30 layers) — added (+51%
-      trainable params); r16@1e-4 rerun LANDED (design §0j): fineweb plateau did NOT move
-      (12.72 vs 12.34; mixer-coverage hypothesis dead) — wikitext/code deltas were diet
-      composition (striped cap). Substrate/dose hypothesis survives test 1
+      trainable params); r16@1e-4 rerun LANDED but is INCONCLUSIVE on the mixer question
+      (design §0j corrected 2026-11-11: compared against the wrong lr arm + f16/Q4
+      precision mixing; diet confound could mask a mixer gain). Isolating run queued
 - [x] Per-epoch shuffle + whole-file striped cap sampling in the trainer. [ ] Interleaving
       diet builder still to commit (diet re-runs depend on it)
 - [x] Layer scorer off-by-one fixed (cos(in_i, out_i), 10-window average); [ ] re-score
@@ -143,9 +145,9 @@ keeps surgery + build + eval. Issue docs: `2026_11_07_llamacpp_cpu_finetune.md`,
       first full cycle done 2026-11-08 (design §0c): drop2 PPL 12.82 -> 8.16, 2270 tok/s at
       3.9 GiB, desktop-usable. Checkpoint/resume wired for pausable runs.
 - [x] Plateau rerun LANDED (`~/forge-gpu/drop2-repair-r2fix-lr1e4`, box:
-      `~/m0/runs/drop2-repair-r2fix-lr1e4/` incl. Q4_K_M GGUF): fineweb plateau stands —
-      mixer repair changed nothing there; wiki/code moves were diet composition. §0j has
-      the verdict + the 3-corpus row
+      `~/m0/runs/drop2-repair-r2fix-lr1e4/` incl. Q4_K_M GGUF): diet re-fingers domains
+      as §0d predicts; mixer effect INCONCLUSIVE (confounded — see §0j corrected reading
+      + the isolating run above)
 - [ ] Next repair experiment: diverse repair data (SFT mixture vs fineweb-edu — Gemma's
       candidates) evaluated over *multiple* corpora to separate domain adaptation from true
       repair (§0c caveat #2) ⬜

@@ -663,26 +663,38 @@ and the two decisive experiments were fired before the rest:
 **Experiments fired:**
 
 - **The plateau rerun — LANDED 2026-11-11 ~03:10 (50 min train + floor eval):
-  the plateau stands.** r16@1e-4 on drop2, 2 epochs, 6.14M tokens, 12M-char striped
-  mixed diet, fixed targets (mixers included, trainable 30.4M); floor on Q4_K_M:
+  INCONCLUSIVE on the mixer question (diet + precision confounded; isolating run
+  queued).** r16@1e-4 on drop2, 2 epochs, 6.14M tokens, 12M-char striped mixed
+  diet, fixed targets (mixers included, trainable 30.4M); r2fix floor at Q4_K_M:
 
-  | drop2 arm (Q4_K_M floor) | wikitext | fineweb | code |
-  |---|---:|---:|---:|
-  | base (unsliced, f16) | 9.33 | 10.44 | 3.17 |
-  | unrepaired | 12.82 | 13.55 | 3.57 |
-  | old lr1e4 (codefw head-cap diet) | 9.97 | 12.34 | 3.28 |
-  | **r2fix (striped diet + mixer targets)** | **8.66** | **12.72** | **3.63** |
+  | drop2 arm | precision | wikitext | fineweb | code |
+  |---|---|---:|---:|---:|
+  | base (unsliced) | f16 | 9.33 | 10.44 | 3.17 |
+  | unrepaired | f16 | 12.82 | 13.55 | 3.57 |
+  | old r16@lr1e-4 (codefw head-cap; §0f best arm) | f16 | 9.87 | 12.22 | 3.33 |
+  | old r16@lr2e-4 (the §0d codefw row) | f16 | 9.97 | 12.34 | 3.28 |
+  | **r2fix (striped diet + mixer targets)** | **Q4_K_M** | **8.66** | **12.72** | **3.63** |
 
-  Reading: **fineweb did not move** (12.72 vs 12.34, both ≈ the old +1.9–2.3 plateau over
-  base's 10.44; mixfull's 12.39 sat at the same wall). Repairing the 22 unrepaired
-  linear-attention mixers does **not** unlock more fineweb healing — the mixer-coverage
-  hypothesis is dead and "QLoRA-substrate/dose-bound" survives its first test. wikitext
-  8.66 and code 3.63 are diet-composition effects, not quality moves: the striped cap
-  puts wiki into the diet (wikitext healed past base) and code's share fell 39%→12%
-  (code regressed toward unrepaired) — §0d's diets-fingerprint-domains, confirmed.
-  Caveat per review r2 f9: single seed; the ±0.1-class noise band doesn't change the
-  direction. **Next on this thread: the NF4→bf16 merge-shift test** (is the wall the
-  4-bit training substrate or the merge?), then dose (a 2× epoch arm on the striped diet).
+  Reading (corrected 2026-11-11 after external review of the first write-up, which
+  compared against the wrong lr arm and mixed precisions):
+  1. **The mixer effect is not isolated by this run.** Two things changed at once —
+     the LoRA target list AND the diet (code share 39%→12% via striped cap). §0d's
+     "code is the multivitamin" says cutting code from the diet should *hurt* fineweb,
+     exactly the effect that would mask a mixer gain. The comparator is also f16 vs
+     r2fix's Q4_K_M, and quantization alone adds PPL (§0c: +0.18 wikitext for
+     drop2-repair; §0b: 0.2–2.3 range on other arms).
+  2. **What the run does support:** the striped diet re-fingers domains as §0d predicts
+     (wikitext healed past base at 8.66 — wiki finally in the diet; code regressed toward
+     unrepaired at 3.63 — code share collapsed). Fineweb moved +0.5 vs the true 1e-4
+     comparator (12.72 vs 12.22, Q4-vs-f16 confounded), which is not a breakthrough but
+     also not clean flatness — attribution unknown.
+  3. **Isolating run queued (50 min): striped diet + CLASSIC target list** (old
+     q/k/v/o+MLP only), same lr/epochs/ctx/batch, `--seed` newly added to the trainer
+     so diet sampling + epoch shuffle are repeatable (r2fix ran unseeded — shuffle noise
+     rides on both arms). Both arms then compared on the Q4_K_M floor. Within ~0.1 on
+     fineweb ⇒ mixer-coverage hypothesis genuinely dead and the NF4→bf16 merge-shift
+     test is next; a mixer gain of the same order as the diet confound ⇒ levers
+     re-prioritized. Until that lands: **inconclusive**, not dead.
 - **The 27B do-nothing baseline** (Altra, `~/m0/baseline-27b/`): imatrix from the Q8_0 →
   IQ3_M / IQ3_XS / Q3_K_M quants, sizes + three-corpus PPL floor. If an unsliced 27B at
   3-bit sits in the 5080-comfort band (~≤12.5 GiB), every sliced+repaired 27B candidate

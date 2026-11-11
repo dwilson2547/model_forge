@@ -41,6 +41,11 @@ LORA_TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj",
                 "gate_proj", "up_proj", "down_proj",
                 "in_proj_qkv", "in_proj_z", "in_proj_a", "in_proj_b", "out_proj"]
 
+# the pre-2026-11-11 list, for isolating the mixer-coverage experiment: it repaired only
+# q/k/v/o + MLP, i.e. the full-attention mixers and the FFNs, never linear_attn.*
+LORA_TARGETS_CLASSIC = ["q_proj", "k_proj", "v_proj", "o_proj",
+                        "gate_proj", "up_proj", "down_proj"]
+
 # Modules kept out of the NF4 base at load time. in_proj_a/b are 32-row linears in
 # the linear-attention mixers: bnb 4-bit-quantizes them by default and LoRA against
 # packed NF4 there is risky, so they stay bf16 (the review r2 caveat). lm_head must
@@ -109,6 +114,12 @@ def main():
     ap.add_argument("--calibrate", action="store_true",
                     help="measure throughput only: no checkpoints, no merge, no GGUF")
     ap.add_argument("--merge-only", default="", help="skip training; merge this adapter dir into a bf16 CPU copy of the base and save")
+    ap.add_argument("--lora-targets", choices=["all", "classic"], default="all",
+                    help="'all' = q/k/v/o + MLP + linear_attn mixers (r2fix, current default); "
+                         "'classic' = the pre-2026-11-11 q/k/v/o + MLP list (isolation arms)")
+    ap.add_argument("--seed", type=int, default=0,
+                    help="0 = unseeded; otherwise seeds torch+random so striped-cap sampling "
+                         "and epoch shuffles are repeatable (all future arms should pass it)")
     ap.add_argument("--sft", action="store_true",
                     help="chat-template SFT on a plain-text corpus (v2 pair design)")
     ap.add_argument("--sft-dataset", default="",
@@ -124,6 +135,12 @@ def main():
     if args.merge_only:
         _merge_to_hf(args.hf_dir, args.merge_only, args.out)
         return
+
+    if args.seed:
+        import random as _rand
+        torch.manual_seed(args.seed)
+        _rand.seed(args.seed)
+    lora_targets = (LORA_TARGETS if args.lora_targets == "all" else LORA_TARGETS_CLASSIC)
 
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from peft import LoraConfig, get_peft_model
@@ -155,7 +172,7 @@ def main():
     model.gradient_checkpointing_enable()
 
     lcfg = LoraConfig(r=args.lora_r, lora_alpha=2 * args.lora_r, lora_dropout=0.0,
-                      target_modules=LORA_TARGETS,
+                      target_modules=lora_targets,
                       bias="none", task_type="CAUSAL_LM")
     model = get_peft_model(model, lcfg, adapter_name="repair")
     if args.resume:
@@ -368,7 +385,9 @@ def main():
         "hf_dir": str(args.hf_dir), "corpus": str(args.corpus),
         "params": {"epochs": args.epochs, "ctx": args.ctx, "batch": args.batch,
                    "accum": args.accum, "lora_r": args.lora_r, "lr": args.lr},
-        "lora_targets": LORA_TARGETS,
+        "lora_targets": lora_targets,
+        "lora_target_mode": args.lora_targets,
+        "seed": args.seed,
         "cap_sampling": cap_mode,
         "chunk_shuffle": True,
         "format": ("sft-chat-v3" if args.sft_dataset else
