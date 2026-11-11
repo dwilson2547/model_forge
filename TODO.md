@@ -42,11 +42,12 @@ fixes recorded in design §0j.
 
 - [x] drop2-ranked-fused recipe: `fuse_pairs` verified no-op — op removed from all three
       `-fused` recipes with a provenance note; ops now raise on requested-fusion no-ops
-- [ ] Isolating run (TOP of the repair queue, ~50 min): striped diet + CLASSIC target
-      list, same seed/lr/epochs/ctx/batch as r2fix — isolates the mixer effect on the
-      Q4_K_M floor. Within ~0.1 on fineweb => mixer hypothesis dead;
-- [ ] NF4→bf16 merge-shift test (adapter-on-NF4 PPL vs merged-bf16 PPL) — ordered behind
-      the isolating run; don't build on the mixer verdict until it lands
+- [x] Isolating run LANDED (design §0j): classic vs all at seed 1234, identical diet —
+      fineweb 12.104 vs 12.221 (f16): no mixer gain (slight classic edge), wiki/code
+      even; quant penalty measured (+0.35 fw at Q4); seed noise measured (~±0.27 fw)
+      — single sub-0.3 fineweb deltas are not evidence. Mixer-coverage hypothesis dead.
+- [ ] NF4→bf16 merge-shift test (adapter-on-NF4 PPL vs merged-bf16 PPL) — NOW TOP of
+      the repair queue (mixer verdict landed); dose arm (2× epochs striped) behind it
 - [x] Diet-build audit: mixed.train.txt is a plain concatenation (code→fineweb→wiki,
       round-2 finding 2 settled it); recover_gpu now shuffles per epoch and samples the
       `--max-chars` cap across the whole file (striped)
@@ -58,7 +59,7 @@ fixes recorded in design §0j.
       copy (box drift — repo is source of truth)
 
 
-## Review round 2 follow-ups (Claude, 2026-11-11 — items 1–3, 6 partially, 7 done)
+## Review round 2 follow-ups (Claude, 2026-11-11 — fix plan items 1–3, 7 done)
 
 Full detail + ordered fix plan in `docs/issues/2026_11_11_review_findings_round2.md`.
 Fixes + fired experiments recorded in design §0j.
@@ -66,7 +67,7 @@ Fixes + fired experiments recorded in design §0j.
 - [x] LoRA targets miss all `linear_attn.*` projections (22/30 layers) — added (+51%
       trainable params); r16@1e-4 rerun LANDED but is INCONCLUSIVE on the mixer question
       (design §0j corrected 2026-11-11: compared against the wrong lr arm + f16/Q4
-      precision mixing; diet confound could mask a mixer gain). Isolating run queued
+      precision mixing; diet confound could mask a mixer gain). Isolating run landed — verdict in design §0j
 - [x] Per-epoch shuffle + whole-file striped cap sampling in the trainer. [ ] Interleaving
       diet builder still to commit (diet re-runs depend on it)
 - [x] Layer scorer off-by-one fixed (cos(in_i, out_i), 10-window average) + 4B re-score
