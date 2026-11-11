@@ -787,6 +787,7 @@ iso arms, protocol held), and the floor collapses into an overfit signature:
 | unrepaired | 12.82 | 13.55 | 3.57 |
 | 2-epoch arms (iso pair, Q4) | 8.57 | 12.45 | 3.56 |
 | **4-epoch dose arm (Q4_K_M)** | **10.44** | **15.64** | **4.19** |
+| 4-epoch dose arm (f16) | 10.28 | 15.39 | 4.08 |
 
 Fineweb 15.64 is WORSE THAN THE UNREPAIRED WOUND (13.55); code 4.19 likewise. Training
 loss improved while held-out PPL exploded — textbook noise-fit on a 12M-char corpus at
