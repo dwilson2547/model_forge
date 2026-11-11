@@ -111,6 +111,18 @@ def apply_drop(model, op, tokenizer, calib_text="", fuse=False):
     cfg.num_hidden_layers = len(new_layers)
     swap_layer_stack(parent, attr, nn.ModuleList(new_layers))
 
+    if fuse and not fused_with:
+        # Round 1 finding 1 (2026-11-10): the type guard made fusion a silent no-op
+        # for qwen3.5's hybrid pattern (dropped layers' predecessors were
+        # full-attention). A requested op that did nothing must fail loudly, not
+        # ship a recipe whose name promises something the weights don't contain.
+        raise RuntimeError(
+            "fuse_pairs was requested but nothing fused: every dropped layer's "
+            "predecessor had a different type or shape. This recipe's fusion is a "
+            "no-op - remove the fuse_pairs op (the -fused recipes recorded this on "
+            "2026-11-10: dropped 24/28 are linear, predecessors 23/27 are "
+            "full-attention)")
+
     return {
         "dropped": sorted(drop),
         "kept_layers": len(new_layers),
@@ -161,6 +173,15 @@ def apply_prune_heads(model, op):
     head_dim = getattr(cfg, "head_dim", None)
     if not n_heads or not head_dim:
         return {"skipped": "no attention head geometry in config"}
+    # Round 2 finding 7 (2026-11-11): with attn_output_gate=true, q_proj carries
+    # 2 x n_heads x head_dim rows (query + gate). Slicing keep_h*head_dim rows
+    # is exactly half of what the module expects. Not implemented — fail loudly
+    # rather than produce a silently-broken checkpoint (no recipe uses it yet).
+    if getattr(cfg, "attn_output_gate", False):
+        raise NotImplementedError(
+            "prune_heads does not support attn_output_gate models yet: q_proj holds "
+            "query AND gate rows (2 x n_heads x head_dim), so a head-aligned slice "
+            "must cut both halves in step. Write it before any 27B head-prune grid.")
     if n_heads and n_kv != n_heads and n_heads % n_kv != 0:
         return {"skipped": f"GQA geometry H={n_heads} KV={n_kv} not divisible"}
     group = n_heads // n_kv

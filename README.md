@@ -7,18 +7,23 @@ tier: project
 CPU model-making pipeline for the Ampere Altra node: structural surgery (layer drop/fuse, FFN/head
 slicing), quantization, franken-MoE / upcycled MoE assembly, and a two-stage benchmark funnel that
 ranks the candidate models on the hardware they'll run on. Fire a job — *"shrink Qwen3.8-27B to
-~9B"* — and get back a leaderboard: which surgery+quant configs survived, measured on quality,
+5080-comfort"* — and get back a leaderboard: which surgery+quant configs survived, measured on quality,
 tok/s, RAM, and disk.
 
-**Status: design phase (2026-11-06); M0 hardware bring-up done (2026-11-07).** The Ampere Altra is up:
-128× Neoverse-N1, 250 GiB RAM, llama.cpp `e95426f` built, baseline table measured — see
-[`docs/design.md`](docs/design.md) §0. Code milestones M1–M5 are next; current state in
+**Status: v3 shipped (2026-11-11).** The surgery loop is validated end-to-end (M1 ✅), GPU QLoRA
+recovery is the working repair path (M4 pivot — CPU recovery measured out at ~2 tok/s), the first
+survivor is published (`dwilson2547/Qwen3.5-4B-drop2-mixed-repair` + GGUF sibling), and the
+triage-SFT arc landed v3 (`qwen35-4b-drop2-sftv3-triage`). Measured story so far in
+[`docs/design.md`](docs/design.md) §0a–§0j; current state and next steps in
 [`TODO.md`](TODO.md).
 
 ## Layout
 
-- `docs/design.md` — the design (pipeline, recipe format, benchmark tiers, funnel, milestones)
-- `TODO.md` — M0–M5 milestones; M0 is the hardware bring-up baseline
-- Code (when M1 starts): `forge/` CLI + worker, `surgery/` ops, `bench/` suite, `runs/` artifacts
+- `docs/design.md` — the design + the measured record (§0a–§0j)
+- `TODO.md` — milestones, review follow-ups, the v4 SFT diet plan
+- `surgery/` — ranking, ops, recipes, GPU QLoRA recovery, triage-corpus extraction
+- `bench/` — serve harness + task board (chat-mode grading)
+- `recipes/`, `cards/` — provenance per candidate / keeper
+- `forge/` CLI + funnel (M3, not started)
 
-Plays well with the rest of the `ai` domain: serving stays on `gpu-scheduler`; recovery fine-tuning runs on the Altra itself, CPU-only, via llama.cpp.
+Plays well with the rest of the `ai` domain: serving stays on `gpu-scheduler`; recovery fine-tuning runs on the desktop/cluster GPUs (QLoRA), surgery + eval + quantize on the Altra.

@@ -7,21 +7,51 @@ whichever machine hosts llama.cpp (the Altra does convert/quantize/eval via the
 regular pipeline); this script's job ends with a merged HF dir + adapter checkpoints.
 
 Pausable by design: --save-every N writes an adapter checkpoint; restart with
---resume <ckpt dir> to continue. VRAM: 4-bit base + LoRA ~5-7 GB at batch 8 ctx 512
+--resume <ckpt dir> to continue. VRAM: 4-bit base + LoRA ~6-8 GB at batch 4 ctx 512
 on a 4B model, leaving the desktop usable while training.
+
+Review round 2 fixes (docs/issues/2026_11_11_review_findings_round2.md):
+- LoRA targets now include the linear-attention token mixers (in_proj_qkv/z/a/b,
+  out_proj) — 22 of 30 drop2 layers previously got no repair on the modules that
+  carry the recurrent state (finding 1).
+- Raw-text mode samples --max-chars across the WHOLE file (striped), not the head;
+  chunk order is shuffled every epoch (finding 2 / round-1 #3: "codefw" was 78%
+  llama.cpp C++ purely because code sits at offset 0 of the concatenation).
+- --accum is a true gradient-accumulation count: epochs and cosine T_max are in
+  optimizer steps, each consuming accum micro-batches (round-1 #4).
+- SFT datasets drop records whose target would be truncated (never teach a
+  truncated <|im_end|>) and skip counts are reported per kind (finding 4).
+- --save-every 0 disables periodic checkpoints only; final save + merge always run
+  (round-1 minor: NameError on `report`).
 """
 
 import argparse
 import json
+import random
 import time
 from pathlib import Path
 
 import torch
+import torch.nn.functional as F
+
+# Qwen3.5 hybrid: q/k/v/o + MLP projections on every layer, plus the linear-attention
+# token mixers on non-full-attention layers. conv1d/norm stay out of LoRA (norm layers
+# aren't LoRA-compatible; conv1d is tiny and input-adjacent).
+LORA_TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj",
+                "gate_proj", "up_proj", "down_proj",
+                "in_proj_qkv", "in_proj_z", "in_proj_a", "in_proj_b", "out_proj"]
+
+# Modules kept out of the NF4 base at load time. in_proj_a/b are 32-row linears in
+# the linear-attention mixers: bnb 4-bit-quantizes them by default and LoRA against
+# packed NF4 there is risky, so they stay bf16 (the review r2 caveat). lm_head must
+# also be listed — passing this list replaces transformers' default skip list, and
+# without it lm_head loads as an unpacked Linear4bit that asserts on the first
+# forward (verified 2026-11-11).
+FP32_SKIP_MODULES = ["in_proj_a", "in_proj_b", "lm_head"]
 
 
 def _merge_to_hf(hf_dir, adapter_dir, out_dir):
     """Exact merge, off the 4-bit weights: bf16 CPU base + PeftModel + merge_and_unload."""
-    import json
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from peft import PeftModel
     base = AutoModelForCausalLM.from_pretrained(hf_dir, dtype=torch.bfloat16)
@@ -31,9 +61,31 @@ def _merge_to_hf(hf_dir, adapter_dir, out_dir):
     merged.save_pretrained(hf_out, safe_serialization=True)
     AutoTokenizer.from_pretrained(hf_dir).save_pretrained(hf_out)
     report = {"hf_dir": str(hf_dir), "adapter": str(adapter_dir), "hf_recovered": str(hf_out)}
-    (Path(out_dir) / "recover-results.json").write_text(json.dumps(report, indent=2))
+    (Path(out_dir) / "merge-results.json").write_text(json.dumps(report, indent=2))
     print(f"[recover-gpu] merged -> {hf_out}", flush=True)
     return hf_out
+
+
+def _cap_sample(raw: str, cap: int) -> str:
+    """Sample `cap` chars from across the WHOLE file instead of taking its head.
+
+    The head cap was why "codefw" was mostly llama.cpp: the mixed diet is a plain
+    concatenation (code -> fineweb -> wiki), so the first 12M chars were all code
+    plus early fineweb (review round 2, finding 2). Striped sampling keeps each
+    ctx-window contiguous while spanning every source block.
+    """
+    if len(raw) <= cap:
+        return raw
+    L = len(raw)
+    n_blocks = -(-L // cap)               # ceil
+    seg = max(1, cap // n_blocks)
+    parts = []
+    for b in range(n_blocks):
+        lo = b * L // n_blocks
+        hi = (b + 1) * L // n_blocks
+        s = random.randint(lo, max(lo, hi - seg))
+        parts.append(raw[s: s + seg])
+    return "".join(parts)
 
 
 def main():
@@ -44,12 +96,14 @@ def main():
     ap.add_argument("--epochs", type=float, default=2.0)
     ap.add_argument("--ctx", type=int, default=512)
     ap.add_argument("--batch", type=int, default=4)
-    ap.add_argument("--accum", type=int, default=1)
+    ap.add_argument("--accum", type=int, default=1,
+                    help="micro-batches per optimizer step (true gradient accumulation)")
     ap.add_argument("--lora-r", type=int, default=16)
     ap.add_argument("--lr", type=float, default=1e-4,
                     help="QLoRA lr; 1e-4 measured best for repair-scale doses (2k-floor "
                          "sweep 2026-11-09: 1e-4 < 2e-4 << 4e-4, which nearly unwound the repair)")
-    ap.add_argument("--save-every", type=int, default=100, help="steps between adapter checkpoints")
+    ap.add_argument("--save-every", type=int, default=100,
+                    help="optimizer steps between adapter checkpoints (0 = periodic checkpoints off)")
     ap.add_argument("--resume", default="", help="path to adapter checkpoint dir to resume from")
     ap.add_argument("--max-chars", type=int, default=12_000_000)
     ap.add_argument("--calibrate", action="store_true",
@@ -58,12 +112,13 @@ def main():
     ap.add_argument("--sft", action="store_true",
                     help="chat-template SFT on a plain-text corpus (v2 pair design)")
     ap.add_argument("--sft-dataset", default="",
-                    help="messages-JSONL SFT (v3): records {user, reasoning, answer}. "
+                    help="messages-JSONL SFT (v3): records {user, reasoning, answer, kind}. "
                          "Targets render in the native assistant format "
                          "(prefix auto-opens the think block) + reasoning + "
                          "</think\\n\\n> + answer + <|im_end|>, loss on the whole target. "
-                         "This is the fix for v1/v2 whose content never left the think "
-                         "region (LM Studio showed 'Thought ... then died').")
+                         "Records whose target would be truncated at --ctx are DROPPED "
+                         "(never train toward a truncated <|im_end|>) and skip counts "
+                         "are reported per kind.")
     args = ap.parse_args()
 
     if args.merge_only:
@@ -82,22 +137,25 @@ def main():
     from transformers import BitsAndBytesConfig
     bnb = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
                              bnb_4bit_compute_dtype=torch.bfloat16,
-                             bnb_4bit_use_double_quant=True)
+                             bnb_4bit_use_double_quant=True,
+                             llm_int8_skip_modules=FP32_SKIP_MODULES)
     model = AutoModelForCausalLM.from_pretrained(
         args.hf_dir,
         quantization_config=bnb,
         dtype=torch.bfloat16,
         device_map={"": 0},
     )
+    # in_proj_a/b load as bf16 via llm_int8_skip_modules (verified 2026-11-11: without
+    # it bnb 4-bit-quantizes the 32-row linears — and casting packed Params4bit bytes
+    # to bf16 post-load would corrupt them, so the exclusion happens at load time).
     model.config.use_cache = False
     model.enable_input_require_grads()
     # Activations are the VRAM hog at ctx 512 x batch 8 (the 250k-vocab CE alone peaks
-    # several GiB in fp32). Grad checkpointing is nearly free at 0.5% trainable params.
+    # several GiB in fp32). Grad checkpointing is nearly free at <1% trainable params.
     model.gradient_checkpointing_enable()
 
     lcfg = LoraConfig(r=args.lora_r, lora_alpha=2 * args.lora_r, lora_dropout=0.0,
-                      target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-                                      "gate_proj", "up_proj", "down_proj"],
+                      target_modules=LORA_TARGETS,
                       bias="none", task_type="CAUSAL_LM")
     model = get_peft_model(model, lcfg, adapter_name="repair")
     if args.resume:
@@ -105,18 +163,35 @@ def main():
         model.load_adapter(args.resume, adapter_name="repair")
         print(f"[recover-gpu] resumed adapter from {args.resume}", flush=True)
     model.print_trainable_parameters()
+    for name, m in model.named_modules():
+        if hasattr(m, "in_proj_qkv"):
+            probe = ", ".join(
+                f"{p}={getattr(m, p).weight.dtype}".replace("torch.", "")
+                for p in ("in_proj_qkv", "in_proj_z", "in_proj_a", "in_proj_b")
+                if hasattr(m, p))
+            print(f"[recover-gpu] linear-attn probe {name}: {probe}", flush=True)
+            break
 
+    skipped = {}
+    cap_mode = "n/a (sft-dataset)"
     if args.sft_dataset:
-        # v3: records {user, reasoning, answer}. Target rendered through the
-        # template's own reasoning_content path, so the think-open/close
-        # structure is byte-exact native (never hand-assembled): the generation
-        # prompt auto-OPENS the think block; the model must learn to CLOSE it -
-        # the missing piece from v1/v2 (their content never left the think
-        # region; LM Studio showed "Thought ... then died").
+        # v3: records {user, reasoning, answer, kind}. Target rendered through the
+        # template's own reasoning_content path, so the think-open/close structure is
+        # byte-exact native (never hand-assembled): the generation prompt auto-OPENS
+        # the think block; the model must learn to CLOSE it — the missing piece from
+        # v1/v2 (their content never left the think region; LM Studio showed
+        # "Thought ... then died").
         import json as _json
         ds = [_json.loads(l) for l in Path(args.sft_dataset).open()]
         examples = []
+
+        def _skip(kind, total, reason):
+            total.setdefault(kind, [0, set()])
+            total[kind][0] += 1
+            total[kind][1].add(reason)
+
         for rec in ds:
+            kind = rec.get("kind", "?")
             user_msgs = [{"role": "user", "content": rec["user"]}]
             uprefix = tok.apply_chat_template(
                 user_msgs, tokenize=False, add_generation_prompt=False)
@@ -130,31 +205,31 @@ def main():
             prefix = tok(uprefix, add_special_tokens=False)["input_ids"]
             tgt = tok(target_str, add_special_tokens=False)["input_ids"]
             if len(prefix) > args.ctx - 24:
-                continue                    # bundle alone too long for this ctx
-            if len(prefix) + len(tgt) > args.ctx:
-                tgt = tgt[: args.ctx - len(prefix)]
-            if len(prefix) + len(tgt) < 24:    # degenerate after truncation
+                _skip(kind, skipped, "prefix>ctx")          # bundle alone too long
+                continue
+            if len(prefix) + len(tgt) > args.ctx + 24:
+                _skip(kind, skipped, "target-would-truncate")  # drop, never truncate
+                continue
+            if len(prefix) + len(tgt) < 24:                  # degenerate
+                _skip(kind, skipped, "too-short")
                 continue
             examples.append((torch.tensor(prefix + tgt),
                              torch.tensor([-100] * len(prefix) + tgt)))
-        n_chunks = len(examples)
-        steps_per_epoch = n_chunks // (args.batch * args.accum)
-        total_steps = int(steps_per_epoch * args.epochs)
-        print(f"[recover-gpu] SFT v3 dataset: {n_chunks} examples "
-              f"(longest {max(len(e[0]) for e in examples)} tok); "
-              f"{steps_per_epoch} steps/epoch; {total_steps} steps total",
-              flush=True)
+        n_seen = len(examples) + sum(v[0] for v in skipped.values())
+        print(f"[recover-gpu] SFT v3 dataset: {len(examples)} kept / {n_seen} records"
+              + (f"; skipped by kind: "
+                 + ", ".join(f"{k}={v[0]} ({', '.join(sorted(v[1]))})"
+                             for k, v in sorted(skipped.items())) if skipped else "")
+              + f"; longest kept {max(len(e[0]) for e in examples)} tok", flush=True)
         show = tok.decode(examples[0][0])
-        print(f"[recover-gpu] v3 example[0] target tail: {repr(show[-160:])}",
-              flush=True)
-        # batch collation now happens per batch (variable lengths); rewire below
+        print(f"[recover-gpu] v3 example[0] target tail: {repr(show[-160:])}", flush=True)
     else:
         raw = Path(args.corpus).read_text()
         if len(raw) > args.max_chars:
-            print(f"[recover-gpu] WARNING: corpus {len(raw):,} chars exceeds --max-chars "
-                  f"{args.max_chars:,}; training on the first {args.max_chars:,} only. "
-                  f"Raise --max-chars if this is unintended (it was, once: 2026-11-08).", flush=True)
-        text = raw[: args.max_chars]
+            print(f"[recover-gpu] corpus {len(raw):,} chars > --max-chars "
+                  f"{args.max_chars:,}: striped sampling across the whole file "
+                  f"(not the head — review r2 f2)", flush=True)
+        text = _cap_sample(raw, args.max_chars)
         ids_all = tok(text, return_tensors="pt")["input_ids"][0]
         if args.sft:
             # v2: v1's single fixed generic prompt collapsed instruction-following
@@ -196,107 +271,114 @@ def main():
                 lab_rows.append(lab + [-100] * pad)
             ids = torch.tensor(ids_rows)
             labels = torch.tensor(lab_rows)
+            examples = [(ids[i], labels[i]) for i in range(ids.shape[0])]
             print(f"[recover-gpu] SFT v2: {ids.shape[0]} examples (half paired K={K}), "
-                  f"block {B} tok; example[0]: {repr(tok.decode(ids[0])[:220])}", flush=True)
+                  f"block {B} tok; example[0]: {repr(tok.decode(examples[0][0])[:220])}",
+                  flush=True)
         else:
             seq = (ids_all.shape[0] // args.ctx) * args.ctx
             ids = ids_all[:seq].view(-1, args.ctx)
-            labels = None
-        n_chunks = ids.shape[0]
-        steps_per_epoch = n_chunks // (args.batch * args.accum)
-        total_steps = int(steps_per_epoch * args.epochs)
-        print(f"[recover-gpu] {n_chunks} chunks x {args.ctx} tok; "
-              f"{steps_per_epoch} steps/epoch; {total_steps} steps total", flush=True)
+            examples = [(ids[i], ids[i]) for i in range(ids.shape[0])]
+        cap_mode = "striped" if len(raw) > args.max_chars else "full-file"
+        print(f"[recover-gpu] {len(examples)} examples x <= {args.ctx} tok", flush=True)
+
+    # ---- schedule: micro-steps (batches) vs optimizer steps (accum bundles) ----
+    n_ex = len(examples)
+    if n_ex == 0:
+        raise RuntimeError("no trainable examples survived pre-flight (see skip counts)")
+    micro_per_epoch = max(1, n_ex // args.batch)
+    total_micro = int(micro_per_epoch * args.epochs)
+    n_epochs_i = max(1, -(-total_micro // micro_per_epoch))
+    order = []
+    for _ in range(n_epochs_i):                 # per-epoch shuffle (review r2 f2)
+        order += torch.randperm(n_ex).tolist()
+    opt_total = max(1, -(-total_micro // args.accum))
+    print(f"[recover-gpu] {micro_per_epoch} micro-steps/epoch x {args.epochs} epochs = "
+          f"{total_micro} micro-steps == {opt_total} optimizer steps "
+          f"(batch {args.batch}, accum {args.accum})", flush=True)
+
+    pad_id = tok("<|im_end|>", add_special_tokens=False)["input_ids"]
+    pad_id = pad_id[0] if pad_id else 0
 
     opt = AdamW8bit([p for p in model.parameters() if p.requires_grad],
                     lr=args.lr, weight_decay=0.0)
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(total_steps, 1))
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=opt_total)
+
+    def collate(sel):
+        L = max(len(examples[i][0]) for i in sel)
+        xs, ys = [], []
+        for i in sel:
+            x, y = examples[i]
+            p = L - len(x)
+            xs.append(torch.cat([x, x.new_full((p,), pad_id)]) if p else x)
+            ys.append(torch.cat([y, y.new_full((p,), -100)]) if p else y)
+        return torch.stack(xs), torch.stack(ys)
 
     t0 = time.time()
     tokens_seen = 0
-    log_every = max(1, total_steps // 20)
+    log_every = max(1, total_micro // 20)
     losses = []
     model.train()
-    # dataset mode: per-epoch-shuffled visit order, per-batch collation
-    # (variable lengths, padding trailing - causal attn ignores the pad tail)
-    order = []
-    if args.sft_dataset:
-        m = torch.tensor([len(e[0]) for e in examples])
-        pad_id = examples[0][0][-1].item()   # im_end as pad; positions masked
-        for _ in range(int(args.epochs) + 1):
-            order += torch.randperm(len(examples)).tolist()
-    for step in range(total_steps):
-        if args.sft_dataset:
-            sel = order[step * args.batch: (step + 1) * args.batch]
-            L = max(len(examples[i][0]) for i in sel)
-            xb = torch.stack([
-                torch.cat([examples[i][0],
-                           examples[i][0].new_full((L - len(examples[i][0]),), pad_id)])
-                for i in sel]).to(model.device)
-            yb = torch.stack([
-                torch.cat([examples[i][1],
-                           examples[i][1].new_full((L - len(examples[i][1]),), -100)])
-                for i in sel]).to(model.device)
-            logits = model(input_ids=xb).logits
-            loss = torch.nn.functional.cross_entropy(
-                logits[:, :-1].reshape(-1, logits.shape[-1]),
-                yb[:, 1:].reshape(-1), ignore_index=-100)
-        else:
-            s = (step * args.batch) % n_chunks
-            xb = ids[s: s + args.batch].to(model.device)
-            logits = model(input_ids=xb).logits
-            if labels is not None:  # SFT v2: completion-only loss on assistant tokens
-                yb = labels[s: s + args.batch].to(model.device)
-                loss = torch.nn.functional.cross_entropy(
-                    logits[:, :-1].reshape(-1, logits.shape[-1]),
-                    yb[:, 1:].reshape(-1), ignore_index=-100)
-            else:
-                loss = torch.nn.functional.cross_entropy(
-                    logits[:, :-1].reshape(-1, logits.shape[-1]),
-                    xb[:, 1:].reshape(-1))
+    for micro in range(total_micro):
+        sel = order[micro * args.batch: (micro + 1) * args.batch]
+        if len(sel) < args.batch:               # tail micro-batch: drop, don't short-batch
+            break
+        xb, yb = collate(sel)
+        xb, yb = xb.to(model.device), yb.to(model.device)
+        logits = model(input_ids=xb).logits
+        loss = F.cross_entropy(logits[:, :-1].reshape(-1, logits.shape[-1]),
+                               yb[:, 1:].reshape(-1), ignore_index=-100)
         (loss / args.accum).backward()
         losses.append(loss.item())
         tokens_seen += xb.numel()
-        if (step + 1) % args.accum == 0:
+        os_done = (micro + 1) // args.accum
+        if (micro + 1) % args.accum == 0:
             opt.step()
             sched.step()
             opt.zero_grad(set_to_none=True)
-        if (step + 1) % log_every == 0 or step == 0:
+            if args.save_every and os_done % args.save_every == 0:
+                model.save_pretrained(out / "ckpt" / f"step{os_done}")
+                print(f"[recover-gpu] checkpoint saved: optimizer step {os_done}",
+                      flush=True)
+        if (micro + 1) % log_every == 0 or micro == 0:
             dt = time.time() - t0
-            print(f"[recover-gpu] step {step+1}/{total_steps} loss {loss.item():.4f} "
+            print(f"[recover-gpu] micro {micro+1}/{total_micro} loss {loss.item():.4f} "
                   f"(avg {sum(losses[-log_every:])/len(losses[-log_every:]):.4f}) "
                   f"{tokens_seen/dt:.0f} tok/s {dt:.0f}s "
                   f"vrsm {torch.cuda.memory_allocated()/2**30:.1f}GiB", flush=True)
-        if args.save_every and (step + 1) % args.save_every == 0:
-            model.save_pretrained(out / "ckpt" / f"step{step+1}")
-            print(f"[recover-gpu] checkpoint saved: step {step+1}", flush=True)
 
     if args.calibrate:
         rate = tokens_seen / (time.time() - t0)
-        print(f"CALIBRATION: {rate:.0f} tok/s (batch {args.batch}, ctx {args.ctx}, QLoRA r{args.lora_r})", flush=True)
+        print(f"CALIBRATION: {rate:.0f} tok/s (batch {args.batch}, ctx {args.ctx}, "
+              f"QLoRA r{args.lora_r}, accum {args.accum})", flush=True)
         return
 
-    if args.save_every and not args.calibrate:
-        model.save_pretrained(out / "ckpt" / "final")
-        # in-place merge on the 4-bit bnb model is both lossy and un-castable; the
-        # exact path reloads a bf16 CPU base with the saved adapter.
-        adapter_dir = out / "ckpt" / "final" / "repair"
-        model = None  # free GPU + grads before the RAM-heavy merge
-        import gc; gc.collect()
-        _merge_to_hf(args.hf_dir, str(adapter_dir), str(out))
-        hf_out = out / "hf-recovered"
-        wall = time.time() - t0
+    # final save + merge always run (periodic checkpoints were optional)
+    model.save_pretrained(out / "ckpt" / "final")
+    # in-place merge on the 4-bit bnb model is both lossy and un-castable; the
+    # exact path reloads a bf16 CPU base with the saved adapter.
+    adapter_dir = out / "ckpt" / "final" / "repair"
+    model = None  # free GPU + grads before the RAM-heavy merge
+    import gc; gc.collect()
+    _merge_to_hf(args.hf_dir, str(adapter_dir), str(out))
+    hf_out = out / "hf-recovered"
+    wall = time.time() - t0
 
-        report = {
-            "hf_dir": str(args.hf_dir), "corpus": str(args.corpus),
-            "params": {"epochs": args.epochs, "ctx": args.ctx, "batch": args.batch,
-                   "lora_r": args.lora_r, "lr": args.lr},
-            "format": ("sft-chat-v3" if args.sft_dataset else
-                "sft-chat-v2" if args.sft else "raw-completion"),
+    report = {
+        "hf_dir": str(args.hf_dir), "corpus": str(args.corpus),
+        "params": {"epochs": args.epochs, "ctx": args.ctx, "batch": args.batch,
+                   "accum": args.accum, "lora_r": args.lora_r, "lr": args.lr},
+        "lora_targets": LORA_TARGETS,
+        "cap_sampling": cap_mode,
+        "chunk_shuffle": True,
+        "format": ("sft-chat-v3" if args.sft_dataset else
+                   "sft-chat-v2" if args.sft else "raw-completion"),
         "loss_first": losses[0], "loss_last20_avg": sum(losses[-20:]) / min(20, len(losses)),
         "tokens_seen": tokens_seen, "train_tok_per_s": tokens_seen / wall,
         "wall_seconds": wall, "hf_recovered": str(hf_out),
     }
+    if skipped:
+        report["skipped_by_kind"] = {k: v[0] for k, v in skipped.items()}
     (out / "recover-results.json").write_text(json.dumps(report, indent=2))
     print(json.dumps(report, indent=2), flush=True)
     print(f"[recover-gpu] done -> {out}", flush=True)

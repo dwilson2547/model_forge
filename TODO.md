@@ -1,7 +1,8 @@
 # model-forge TODO
 
-Design: [`docs/design.md`](docs/design.md). Status: design phase — nothing below is started.
-M1 can begin on the Ryzen desktop before hardware bring-up if desired (D4 default: wait for M0).
+Design: [`docs/design.md`](docs/design.md). Status: v3 shipped (qwen35-4b-drop2-sftv3-triage,
+2026-11-11); review round 2 fixes applied + two decisive experiments fired (see design §0j):
+plateau rerun on the 5080, 27B 3-bit do-nothing baseline on the Altra. Next: v4 SFT diet (below).
 
 ## M0 — Altra bring-up baseline (fills the ⬜s in the design)
 
@@ -32,39 +33,51 @@ Loop validated end-to-end on Qwen3.5-4B; measured the first quality cliff: drop8
 - [ ] (bookkeeping) AML pytorch images are torch 1.12.1 — dead end for Qwen3.x stack decisions;
       stock torch 2.x it is, per M1's forge_env (torch 2.15.0 works fine on the box)
 
-## External review follow-ups (Claude, 2026-11-10 — verified, not yet acted on)
+## External review follow-ups (Claude, 2026-11-10 — fixed 2026-11-11 except the merge-shift test)
 
-Full detail in `docs/issues/2026_11_10_external_review_findings.md`. All six verified.
+Full detail in `docs/issues/2026_11_10_external_review_findings.md`. All six verified;
+fixes recorded in design §0j.
 
-- [ ] drop2-ranked-fused recipe: `fuse_pairs` never fired (24/28 are linear, their
-      predecessors 23/27 are full-attention; type guard false) — drop the op or the recipe
-- [ ] NF4→bf16 merge-shift test (adapter-on-NF4 PPL vs merged-bf16 PPL) — could be part of
-      the §0f plateau; also `--calibrate` a bf16-LoRA VRAM probe at batch 2–4 on the 5080
-- [ ] Diet-build audit: confirm whether mixed.train.txt was doc-interleaved or source-
-      concatenated (builder not in repo); add per-epoch `randperm` shuffling + cap sampling
-      across the whole file in recover_gpu
-- [ ] Fix `--accum` (truncates epochs to 1/N; cosine T_max/step mismatch) before any 27B run
-- [ ] Ranking v2: average layer_skip_scores over 10–20 windows from a mixed calibration set
-- [ ] Minor: `--save-every 0` NameError; dead `ts` line in recover_gpu
+- [x] drop2-ranked-fused recipe: `fuse_pairs` verified no-op — op removed from all three
+      `-fused` recipes with a provenance note; ops now raise on requested-fusion no-ops
+- [ ] NF4→bf16 merge-shift test (adapter-on-NF4 PPL vs merged-bf16 PPL) — queued behind the
+      plateau rerun (if the rerun moves the floor, the shift explanation is moot)
+- [x] Diet-build audit: mixed.train.txt is a plain concatenation (code→fineweb→wiki,
+      round-2 finding 2 settled it); recover_gpu now shuffles per epoch and samples the
+      `--max-chars` cap across the whole file (striped)
+- [x] Fix `--accum` (was: 1/N of the epochs + LR curve cut N/early; true accumulation now,
+      schedule in optimizer steps)
+- [x] Ranking v2: scores = cos(out[i-1], out[i]) averaged over 10 windows (round 2 f3 fix
+      included); re-score of the 4B pending (pick-set comparison vs [24,28] etc.)
+- [x] `--save-every 0` NameError (final save+merge decoupled); dead `ts` not in the repo
+      copy (box drift — repo is source of truth)
 
 
-## Review round 2 follow-ups (Claude, 2026-11-11 — planned for the next model)
+## Review round 2 follow-ups (Claude, 2026-11-11 — items 1–3, 6 partially, 7 done)
 
 Full detail + ordered fix plan in `docs/issues/2026_11_11_review_findings_round2.md`.
-Resolves prior review #3 (diet IS source-concatenated: code → fineweb → wiki).
+Fixes + fired experiments recorded in design §0j.
 
-- [ ] LoRA targets miss all `linear_attn.*` projections (22/30 layers) — add them, re-run r16@1e-4
-- [ ] Per-epoch shuffle + whole-file cap sampling; commit an interleaving diet builder
-- [ ] Layer scorer off-by-one: `cos(out[i-1], out[i+1])` scores layers i+i+1 → `cos(out[i-1], out[i])`
-- [ ] v3 SFT pre-flight: ctx ≥2048, drop truncated targets, per-kind skip counts, correctness gate,
-      holdout by alert family
-- [ ] Chat grading: grade `content` only (no reasoning fallback), last fence for code
-- [ ] Loop metric: per-temp loop rate over seeds; fix §0g "loops at every temperature" wording
-- [ ] KL-divergence vs base in the floor tier
-- [ ] Baseline row: unsliced 27B imatrix IQ3/Q3 quant vs the 12.5 GiB target
-- [ ] Seed replicate of the kept repair arm; rsLoRA/fixed-α rank re-probe
-- [ ] `prune_heads` broken under `attn_output_gate` (q_proj 2× rows) — fix or fail loudly
-- [ ] Docs: arch is 32 layers (24 linear + 8 full), not 36; stale status headers; duplicate §0d
+- [x] LoRA targets miss all `linear_attn.*` projections (22/30 layers) — added (+51%
+      trainable params); r16@1e-4 rerun IN FLIGHT on the 5080 (`drop2-repair-r2fix-lr1e4`)
+- [x] Per-epoch shuffle + whole-file striped cap sampling in the trainer. [ ] Interleaving
+      diet builder still to commit (diet re-runs depend on it)
+- [x] Layer scorer off-by-one fixed (cos(in_i, out_i), 10-window average); [ ] re-score
+      the 4B + compare pick sets vs [24,28] / [12,24,26,28] before any 27B drop set
+- [ ] v4 SFT pre-flight: drop-not-truncate + per-kind skip counts done in the trainer;
+      correctness gate, alert-family holdout split, and the ctx decision belong to v4
+- [ ] Chat grading: grade `content` only (no reasoning fallback), last fence for code —
+      regrade §0h board if raw generations survive, else on next run
+- [ ] Loop metric: per-temp loop rate over seeds; §0g wording fix
+- [ ] KL-divergence vs base in the floor tier (llama-perplexity --kl-divergence)
+- [x→in flight] Baseline row: unsliced 27B imatrix IQ3_M/IQ3_XS/Q3_K_M vs the 12.5 GiB
+      target (Altra job `~/m0/baseline-27b/`, imatrix → quants → 3-corpus floor)
+- [ ] Seed replicate of the kept repair arm; rsLoRA/fixed-α rank re-probe (repeat the
+      r2fix arm with a second seed when its result lands)
+- [x] `prune_heads` fails loudly under `attn_output_gate` (real fix deferred until a
+      head-prune grid is actually scheduled)
+- [x] Docs: arch corrected to 32 layers (24 linear + 8 full); status headers refreshed;
+      duplicate §0d first copy retired with pointer
 
 ## M2 — benchmark suite
 

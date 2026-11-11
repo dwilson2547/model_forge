@@ -49,8 +49,10 @@ Findings that shape the build:
 
 ## 0a. M1 validation — measured 2026-11-07 ✅ (surgery loop proven; quality cliff measured)
 
-First recipes through the full `surgery/` pipeline on Qwen3.5-4B (36-layer hybrid: 28 linear-
-attention + 8 full, full every 4th, protected from drop). PPL on wikitext-2, 24 chunks; speed
+First recipes through the full `surgery/` pipeline on Qwen3.5-4B (32-layer hybrid: 24 linear-
+attention + 8 full, full every 4th at layers 3,7,…,31, protected from drop. Arch fact corrected
+2026-11-11 per review round 2 finding 7 — earlier drafts said 36/28; the drop2 configs on disk
+show 30 layers post-slice = 32 base). PPL on wikitext-2, 24 chunks; speed
 at the pinned `-t 32 -tb 96`.
 
 | candidate | params | f16 PPL | Q4_K_M PPL | Q4 gen t/s | Q4 pp t/s |
@@ -64,7 +66,7 @@ unattended per recipe; the speed model from §0 holds — dropping 21.5% of para
 decode (22.9→29.4 t/s) at Q4_K_M. Quality, as §4.5 predicted, is where un-recovered surgery
 lands:
 
-1. **Depth:** dropping 8/36 layers costs PPL 9.3 → 40.4. The neighbor-cosine scorer dropped
+1. **Depth:** dropping 8/32 layers costs PPL 9.3 → 40.4. The neighbor-cosine scorer dropped
    `[12,14,20,22,24,25,26,28]` — **four consecutive layers (24–28)** whose hidden states look
    locally skippable, but linear-attention layers carry recurrent state forward, and the scorer
    is blind to that. Fix candidates: no-adjacent-drop constraint, smaller counts, LaCo fusion.
@@ -145,9 +147,13 @@ Findings:
 4. Desktop impact: training holds ~4 GiB VRAM of 16 and leaves the machine usable throughout —
    the D1 concern about desktop-hostage jobs only applies to the 27B-scale QLoRA (overnight class).
 
-## 0d. Repair-diet A/B, three-corpus floor — measured 2026-11-08 ✅
+## 0d. Repair-diet A/B (superseded — see the fuller §0d below)
 
-Two repairs of the same drop2 wound with different diets (same recipe: QLoRA r16, 2 epochs,
+Retired 2026-11-11 per review round 2 finding 11: this section duplicated the fuller
+repair-diet study below it (a 2-diet earlier table; the study includes those rows
+verbatim plus codefw/mixfull). All references to §0d data point at the study table.
+
+~~Two repairs of the same drop2 wound with different diets (same recipe: QLoRA r16, 2 epochs,
 ~4.8M tokens, ~2,200 tok/s), evaluated through the multi-corpus floor (`surgery/multicorpus.py`:
 wikitext-test, fineweb holdout disjoint from any repair data, code from llama.cpp sources; chunks 24).
 
@@ -621,6 +627,56 @@ those cliffs are — report deltas, not absolutes, and remember small-sample eva
   a wrapper service can front the same table. Nothing else needs to be cluster-aware.
 - Recovery is a stage row with a `worker` field (`altra-cpu` for now) — the D1 extension point.
 
+## 0j. Review round 2 — code fixes + the two decisive experiments (2026-11-11, in flight)
+
+External review round 2 (`docs/issues/2026_11_11_review_findings_round2.md`) landed while the
+arc was paused; the fix plan's items 1–3, 7 and round-1 leftovers were implemented tonight,
+and the two decisive experiments were fired before the rest:
+
+**Code fixes (all verified with a 5080 `--calibrate` before firing the real run):**
+
+1. `recover_gpu.py`: LoRA targets now include the linear-attention token mixers
+   (`in_proj_qkv/z/a/b`, `out_proj`) — the old target list repaired 8 of 30 layers' mixers
+   only; trainable params 20.1M → 30.4M (+51%). `in_proj_a/b` stay bf16 at load
+   (`llm_int8_skip_modules` — bnb 4-bit-quantizes these 32-row linears by default, and a
+   post-load cast of packed Params4bit would corrupt them; `lm_head` must also be skipped or
+   it loads as an unpacked Linear4bit that asserts on forward — found by probe, verified).
+2. Raw-text mode: `--max-chars` now samples stripes across the whole file (the head-cap was
+   why "codefw" was 78% llama.cpp C++; the mixed diet is a plain concatenation
+   code→fineweb→wiki) and chunk order is shuffled every epoch (`torch.randperm`).
+3. `--accum` is true gradient accumulation: epochs and cosine `T_max` are in optimizer steps
+   (micro-steps = opt-steps x accum). Previously `--accum N` trained 1/N of the epochs with
+   the LR curve cut 1/N short — latent (all runs used accum 1), fixed before any 27B run.
+4. SFT datasets: records whose target would be truncated are now **dropped, not truncated**
+   (v3 at ctx 512-vs-6144 aside — a truncated target drops `<|im_end|>` and teaches
+   never-stop), with per-kind skip counts printed; `--save-every 0` no longer NameErrors
+   (final save + merge always run).
+5. `ranking.py`: BlockInfluence fix — score is now `cos(out[i-1], out[i])` (was
+   `cos(out[i-1], out[i+1])`, attributing layer i+1's redundancy to layer i), averaged over
+   10 windows spread across the calibration text (was one 2048-token window, i.e. the
+   opening of one article). Re-score of the 4B queued.
+6. `ops.py`: `prune_heads` fails loudly under `attn_output_gate` (q_proj holds query+gate
+   rows — the old head-aligned slice would cut half of what the module expects); requested
+   fusion that fuses nothing now raises (the `-fused` recipes are recorded no-ops — the
+   fuse_pairs op was removed from them with a provenance note).
+
+**Experiments fired:**
+
+- **The plateau rerun** (desktop 5080, `~/forge-gpu/drop2-repair-r2fix-lr1e4`): r16@1e-4 on
+  drop2, 2 epochs, 12M-char striped mixed diet — the same arm as the §0f "plateau"
+  evidence, re-run with mixer targets + shuffle. If the fineweb floor moves materially
+  below the old +1.8 plateau, the "QLoRA-substrate-bound" conclusion was premature (the
+  mixers never got repaired); if it stands, the NF4→bf16 merge-shift test is next.
+- **The 27B do-nothing baseline** (Altra, `~/m0/baseline-27b/`): imatrix from the Q8_0 →
+  IQ3_M / IQ3_XS / Q3_K_M quants, sizes + three-corpus PPL floor. If an unsliced 27B at
+  3-bit sits in the 5080-comfort band (~≤12.5 GiB), every sliced+repaired 27B candidate
+  must beat that row — the do-nothing option gets a real number.
+
+v3 clarification while these run: v3 itself trained at ctx 6144 (per-run
+`recover-results.json`), so finding 4's ctx-512 truncation table did not apply to the
+shipped model — its fixes are prospective for v4; v3's real gaps (system-prompt flattening,
+no correctness gate) stand as diagnosed in §0i.
+
 ## 5. Milestones
 
 Tracked in [`TODO.md`](../TODO.md); summary:
@@ -632,7 +688,7 @@ Tracked in [`TODO.md`](../TODO.md); summary:
   convert → quantize → PPL+speed, validated on the Ryzen. Proves the engine before the box exists.
 - **M2 — suite:** floor + academic subset + first custom tasks (coding, instruct), stage-A smoke.
 - **M3 — funnel + reports:** grid builder, submit CLI, leaderboard/Pareto reports. First real run:
-  27B → ~9B.
+  27B → 5080-comfort (~20–22B params; goal corrected 2026-11-10, §1 note).
 - **M4 — recovery:** llama.cpp LoRA stage C on a stage-A survivor, before-and-after scores.
 - **M5 — MoE:** franken-MoE assembly; then moeify + recovery if llama.cpp MoE LoRA checks out.
 

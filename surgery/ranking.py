@@ -1,8 +1,10 @@
 """Importance scoring: which FFN neurons / which layers can be cut first.
 
-Scores are deliberately cheap (norm-based for width, neighbor-cosine for depth, ShortGPT
-flavored). M1 record: neighbor-similarity replaces the published BlockInfluence formula;
-refine when recoverable-quality data says it matters.
+Scores are deliberately cheap (norm-based for width, BlockInfluence-cosine for
+depth). M1 record: depth scoring originally used a neighbor-similarity variant
+cos(out[i-1], out[i+1]) that attributed layer i+1's redundancy to layer i; fixed
+to the per-layer form cos(out[i-1], out[i]) and averaged over multiple
+calibration windows after the 2026-11-11 external review (findings 3 and r1#5).
 """
 
 import torch
@@ -28,43 +30,70 @@ def _first_output(out):
 
 
 @torch.no_grad()
-def layer_skip_scores(model, layers, calib_text: str, tokenizer, max_tokens: int = 2048) -> list:
-    """score(i) = cos(out[i-1], out[i+1]): how similar the residual stream is *around*
-    layer i — high score means removing layer i changes little. Interior layers only
-    (1..L-2); the rest get -inf.
+def layer_skip_scores(model, layers, calib_text: str, tokenizer,
+                      max_tokens: int = 2048, n_windows: int = 10) -> list:
+    """BlockInfluence-flavored per-layer score: score(i) = cos(out[i-1], out[i]) —
+    layer i's own input (the residual stream it receives, i.e. the previous
+    layer's output) against its own output. High score = the layer changes the
+    stream little. Layers 1..L-1 are scored; layer 0 gets -inf (no pre-layer
+    capture without input hooks).
 
-    Runs the full model forward once with forward hooks on every decoder layer.
+    Review round 2, finding 3 (2026-11-11): this used to compute cos(out[i-1],
+    out[i+1]) — similarity *around* the layer, which attributed layer i+1's
+    redundancy to layer i, and let a cheap full-attention neighbour make its
+    linear counterpart look droppable. Round 1 finding 5: also average over
+    n_windows windows spaced across the calibration text instead of trusting
+    the opening of one article.
+
+    Runs the model forward once per window with output hooks on every decoder
+    layer; scores are averaged across windows. Memory: one window's captures
+    at a time (n_layers x max_tokens x hidden floats on CPU).
     """
     n = len(layers)
     if n < 3:
         raise ValueError("need at least 3 layers to score")
 
-    inputs = tokenizer(calib_text, return_tensors="pt")
-    input_ids = inputs["input_ids"][:, :max_tokens]
+    ids = tokenizer(calib_text, return_tensors="pt")["input_ids"][0]
+    if ids.shape[0] < max_tokens:
+        raise ValueError(
+            f"calibration text is only {ids.shape[0]} tokens; need >= {max_tokens} "
+            f"per window x {n_windows} windows "
+            "(raise the recipe's calib read budget or the calib file size)")
+    last_start = ids.shape[0] - max_tokens
+    starts = [round(k * last_start / max(1, n_windows - 1)) for k in range(n_windows)]
 
-    captured = {}
+    sums = [0.0] * n
+    counts = [0] * n
+    for s in starts:
+        input_ids = ids[s: s + max_tokens].unsqueeze(0)
+        captured = {}
 
-    def hook_factory(idx):
-        def hook(_module, _args, out):
-            if idx not in captured:
-                h = _first_output(out).detach().float().reshape(-1, _first_output(out).shape[-1])
-                captured[idx] = h.cpu()
-        return hook
+        def hook_factory(idx):
+            def hook(_module, _args, out):
+                if idx not in captured:
+                    o = _first_output(out).detach().float()
+                    captured[idx] = o.reshape(-1, o.shape[-1]).cpu()
+            return hook
 
-    handles = [layers[i].register_forward_hook(hook_factory(i)) for i in range(n)]
-    try:
-        model(input_ids=input_ids)
-    finally:
-        for h in handles:
-            h.remove()
+        handles = [layers[i].register_forward_hook(hook_factory(i)) for i in range(n)]
+        try:
+            model(input_ids=input_ids)
+        finally:
+            for h in handles:
+                h.remove()
+        if len(captured) != n:
+            missing = sorted(set(range(n)) - set(captured))
+            raise RuntimeError(f"hooks failed to capture layer outputs for indices {missing}")
 
-    if len(captured) != n:
-        missing = sorted(set(range(n)) - set(captured))
-        raise RuntimeError(f"hooks failed to capture layer outputs for indices {missing}")
+        for i in range(1, n):
+            a = captured[i - 1]
+            b = captured[i]
+            sums[i] += F.cosine_similarity(a, b, dim=1).mean().item()
+            counts[i] += 1
+        del captured
 
     scores = [float("-inf")] * n
-    for i in range(1, n - 1):
-        a = captured[i - 1]
-        b = captured[i + 1]
-        scores[i] = F.cosine_similarity(a, b, dim=1).mean().item()
+    for i in range(1, n):
+        if counts[i]:
+            scores[i] = sums[i] / counts[i]
     return scores

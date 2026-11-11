@@ -1,4 +1,4 @@
-# Drop-policy gradient: 2 ranked drops, min_gap 2 (no adjacent layers), fuse_pairs=true.
+# Drop-policy gradient: 2 ranked drops, min_gap 2 (no adjacent layers), fuse_pairs=true (RETIRED 2026-11-11: verified no-op, see ops note below).
 name: qwen35-4b-drop2-ranked-fused
 base_dir: /home/daniel/m0/registry/Qwen3.5-4B
 out_dir: /home/daniel/m0/runs/qwen35-4b-drop2-ranked-fused
@@ -9,7 +9,8 @@ ops:
     count: 2
     strategy: ranked
     min_gap: 2
-  - op: fuse_pairs
-    enabled: true
+  # fuse_pairs REMOVED 2026-11-11: verified no-op for qwen3.5 (dropped layers are
+  # linear, their immediate predecessors full-attention; the type guard never fired
+  # and the run was byte-identical to the plain -ranked recipe - review r1 f1).
   - op: quantize
     quants: [Q4_K_M]
