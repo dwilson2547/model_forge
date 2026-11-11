@@ -802,7 +802,7 @@ Escalations that remain, in rough cost order: (1) change the wound — corrected
 and route around it (task-level repair via the SFT line already proved 0.73 composite
 at v3); (3) full-weight repair — still out of reach locally (~27 GiB optimizer for bf16).
 
-### 0j.4 — 27B do-noting baseline (in flight 2026-11-11): IQ3_M row landed; two gotchas
+### 0j.4 — 27B do-nothing baseline (in flight 2026-11-11): IQ3_M row landed; two gotchas
 
 Landed so far (three-corpus floor, box `~/m0/baseline-27b/`):
 
