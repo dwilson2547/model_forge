@@ -859,6 +859,20 @@ one prompt — the M2 incident-triage task suite (TODO) is what makes it a verdi
 Also recorded: at 16k ctx + 11.9 GiB weights the 5080 sits at 15.7/16.3 GiB VRAM —
 essentially the practical ceiling for this quant on this card.
 
+### 0j.6 — Second survivor published: dwilson2547/Qwen3.8-27B-IQ3_M (2026-11-11)
+
+The §0j.4/0j.5 do-nothing quant is on HF (public, ungated): IQ3_M from the Q8 chain,
+12.8 GB upload, card + Apache-2.0 LICENSE. Attribution on the card: Qwen team (base,
+Apache-2.0), unsloth (BF16 GGUF source), llama.cpp (quant tooling, MIT), plus the
+imatrix calibration licenses (Wikitext CC BY-SA 3.0/Salesforce, FineWeb ODC-By,
+llama.cpp sources MIT). The card states the generation chain honestly (second-generation:
+Q8_0 -> IQ3_M via --allow-requantize, near-lossless hop), the measured three-corpus
+floor rows, and the 16 GB-GPU practical ceiling. Publish hygiene: one slip caught and
+fixed post-upload (the card folder carried the local publish script -> deleted from the
+repo, path-leak rule now reinforced: card dirs get README + LICENSE only). When the
+BF16-source chain lands, decide: update in place (if floors differ) or annotate the
+card with the first-generation comparison.
+
 ## 5. Milestones
 
 Tracked in [`TODO.md`](../TODO.md); summary:

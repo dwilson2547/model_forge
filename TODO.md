@@ -86,7 +86,9 @@ Fixes + fired experiments recorded in design §0j.
 - [ ] Loop metric: per-temp loop rate over seeds; §0g wording fix
 - [ ] KL-divergence vs base in the floor tier (tracked in M2 above)
 - [x→in flight] Baseline row: unsliced 27B imatrix IQ3_M/IQ3_XS/Q3_K_M vs the 12.5 GiB
-      target (Altra job `~/m0/baseline-27b/`, imatrix → quants → 3-corpus floor)
+      target (Altra job `~/m0/baseline-27b/`, imatrix → quants → 3-corpus floor) — IQ3_M published 2026-11-11
+      as `dwilson2547/Qwen3.8-27B-IQ3_M` (card + Apache-2.0 + floors; bf16-source pair
+      pending the chain, then update-or-annotate)
 - [ ] Seed replicate of the kept repair arm; rsLoRA/fixed-α rank re-probe (repeat the
       r2fix arm with a second seed when its result lands)
 - [x] `prune_heads` fails loudly under `attn_output_gate` (real fix deferred until a
