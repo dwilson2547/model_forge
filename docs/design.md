@@ -827,6 +827,13 @@ Gotchas recorded while the BF16-source chain finishes:
    not back-ported to 27b-baseline-driver.sh). Q3_K_M requantized in an implausible
    40s and left an invalid-magic file. The Q8-derived Q3_K_M/IQ3_XS rows are dropped;
    the BF16 chain provides the honest versions (and Q3_K_M needs no imatrix at all).
+3. **`llama-quantize --merge` does not exist in this llama.cpp build** (2026-11-12):
+   the bf16 driver died at step [3/5] on the unknown flag (usage dump -> `set -e`).
+   The build reads split GGUF inputs transparently — no flag needed, output is a
+   single merged GGUF. Also: the 24.4h BF16 imatrix completed intact (530/530
+   chunks, 496 entries; wc-bytes/27.3MB = save-count gives exact progress at 10
+   chunks per save) and was NOT lost; the chain was resumed steps-3–5 via
+   `27b-bf16-resume.sh`, full per-quant logs (`quant-*.log`) instead of `tail -4`.
 
 ### 0j.5 — LM Studio probe: the do-nothing 27B aces the flagship triage sample (2026-11-11)
 
@@ -872,6 +879,41 @@ fixed post-upload (the card folder carried the local publish script -> deleted f
 repo, path-leak rule now reinforced: card dirs get README + LICENSE only). When the
 BF16-source chain lands, decide: update in place (if floors differ) or annotate the
 card with the first-generation comparison.
+
+### 0j.7 — Pass 1 verdict: the corrected scorer's [25,29] picks are the best repaired floor yet (2026-11-12)
+
+Escalation (1) from the plateau closure — *change the wound* — was tested: same seeded
+iso protocol (seed 1234, striped 12M-char diet, r16 @ lr 1e-4, 2 epochs, `--lora-targets
+all`, ctx 512, batch 4), only the drop set changed, [24,28] -> [25,29] (§0j.1 re-score).
+Desktop 5080 training loss 2.625 -> 2.230; floors on the box, f16 + Q4_K_M:
+
+| drop2 arm (f16 floor) | drops | wikitext | fineweb | code | Σ |
+|---|---|---:|---:|---:|---:|
+| iso-classic | [24,28] | 8.365 | 12.104 | 3.507 | 23.975 |
+| iso-all | [24,28] | 8.359 | 12.221 | 3.509 | 24.089 |
+| **Pass-1 [25,29]** | **[25,29]** | **8.031** | **11.894** | **3.485** | **23.410** |
+| Pass-1 [25,29] (Q4_K_M) | [25,29] | 8.207 | 12.166 | 3.537 | 23.910 |
+
+- **Every corpus equal or better than both [24,28] arms**: fineweb −0.21 (vs classic)
+  / −0.33 (vs all), wikitext −0.33/−0.33, code −0.02/−0.02; Σ-improvement −0.57/−0.68.
+  Individually each delta is inside the ±0.27 fineweb shuffle-noise band, but the
+  direction is consistent across all three corpora and both comparators — the first
+  lever to move the repaired floor since the plateau investigation closed (mixers,
+  merge-shift, rank, lr, diet, dose: all measured flat or harmful).
+- The Q4_K_M quant penalty reproduces the known band: +0.18 wiki / +0.27 fw / +0.05 code.
+- The wall itself is **not** broken: fineweb 11.89 is still ~+1.45 over the pf16 base
+  (10.44) — same wall, slightly lower on it.
+
+**Verdict: partial confirmation of the smaller-wound hypothesis.** The fixed BI
+scorer's picks (cos(in_i,out_i), 10 windows) produce a measurably better repaired
+floor than the shipped [24,28] picks under an otherwise identical seeded protocol.
+This is a scorer-quality effect (or a genuinely smaller wound — the two are the same
+claim), and it retro-justifies §0j.1: rank-based picks were leaving ~0.2–0.3 PPL on
+the table. It does NOT re-open the plateau: the fineweb wall stands, now measured
+from a better starting wound. Consequences: (a) future slices should use the fixed
+scorer for picks; (b) the [25,29] arm joins the M5 franken-MoE expert shelf; (c) an
+unrepaired-[25,29] floor row would separate "smaller wound" from "better repair" —
+queued as a cheap box follow-up, not blocking anything.
 
 ## 5. Milestones
 

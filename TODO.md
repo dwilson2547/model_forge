@@ -31,7 +31,10 @@ Loop validated end-to-end on Qwen3.5-4B; measured the first quality cliff: drop8
       [25,29] for count2 (vs shipped [24,28]), and band-clustering SURVIVES the fix —
       spatial-spread constraint stays on the menu; count4/6 sets spread wider (21, 13)
       on their own. No 27B pick without the fixed scorer. Queued candidate: drop2-[25,29]
-      + same repair, to see if the corrected pick buys floor
+      + same repair, to see if the corrected pick buys floor — **LANDED 2026-11-12
+      (§0j.7): [25,29] beats both [24,28] arms on every corpus (Σ −0.57/−0.68); fixed
+      scorer is now the default for all future pick-sets. Follow-up queued (cheap):
+      unrepaired-[25,29] floor row to separate "smaller wound" from "better repair."**
 - [ ] (bookkeeping) AML pytorch images are torch 1.12.1 — dead end for Qwen3.x stack decisions;
       stock torch 2.x it is, per M1's forge_env (torch 2.15.0 works fine on the box)
 
@@ -88,7 +91,12 @@ Fixes + fired experiments recorded in design §0j.
 - [x→in flight] Baseline row: unsliced 27B imatrix IQ3_M/IQ3_XS/Q3_K_M vs the 12.5 GiB
       target (Altra job `~/m0/baseline-27b/`, imatrix → quants → 3-corpus floor) — IQ3_M published 2026-11-11
       as `dwilson2547/Qwen3.8-27B-IQ3_M` (card + Apache-2.0 + floors; bf16-source pair
-      pending the chain, then update-or-annotate)
+      pending the chain, then update-or-annotate). Status 2026-11-12: the 24.4h BF16
+      imatrix is COMPLETE (530/530 chunks, intact); the original driver died at [3/5]
+      on a nonexistent `--merge` flag and was re-driven (`27b-bf16-resume.sh`,
+      gotcha recorded §0j.4.3) — srcbf16 quants + floors in flight, rows pending.
+      NOTE the pending follow-ups: unrepaired-[25,29] floor row (§0j.7), and once the
+      chain exits delete `src-bf16/` (54 GB, reproducible download).
 - [ ] Seed replicate of the kept repair arm; rsLoRA/fixed-α rank re-probe (repeat the
       r2fix arm with a second seed when its result lands)
 - [x] `prune_heads` fails loudly under `attn_output_gate` (real fix deferred until a
