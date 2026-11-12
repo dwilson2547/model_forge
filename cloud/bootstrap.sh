@@ -46,7 +46,11 @@ command -v nvcc > /dev/null || { echo "FATAL: still no nvcc after the toolkit in
 nvcc --version | tail -1
 
 echo "=== [2/6] python env -> ~/forge-env ==="
-[ -d ~/forge-env ] || python3 -m venv ~/forge-env
+# Python 3.13 to match the desktop (the pins need it: numpy 2.5 has no 3.10 wheel, and
+# Ubuntu 22.04 ships 3.10). uv fetches a standalone CPython, so no apt PPA is needed.
+command -v uv > /dev/null || [ -x ~/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh > /dev/null
+export PATH="$HOME/.local/bin:$PATH"
+[ -x ~/forge-env/bin/python ] || uv venv -q --seed --python 3.13 ~/forge-env
 source ~/forge-env/bin/activate
 python3 -m pip install -q --upgrade pip wheel setuptools
 pip install -q "$TORCH" --index-url "https://download.pytorch.org/whl/$IDX"
