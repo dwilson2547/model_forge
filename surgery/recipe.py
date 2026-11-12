@@ -9,7 +9,11 @@ import yaml
 @dataclass
 class DropLayers:
     count: int
-    strategy: str = "uniform"   # uniform | ranked (neighbor-similarity scores on calibration text)
+    strategy: str = "uniform"   # uniform | ranked | explicit
+    # explicit: drop exactly these layer indices (post-2026-11-11 scorer picks land
+    # here, e.g. the fixed BlockInfluence [25,29] for Qwen3.5-4B; protections still
+    # apply and out-of-range/min_gap violations fail loudly)
+    indices: tuple = ()
     # Hybrid-attention safety: layers whose type appears in `protected_types` are never dropped.
     protected_types: tuple = ("full_attention",)
     # Minimum index distance between any two dropped layers. 2 = no adjacent drops —

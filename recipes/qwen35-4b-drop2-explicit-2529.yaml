@@ -1,0 +1,16 @@
+# Fixed-BlockInfluence pick (design 0j.1): the old neighbor-similarity scorer chose
+# [24,28] partly on neighboring layers' evidence; the fixed per-layer scorer
+# (cos(in_i,out_i), 10 windows, wikitext calib) prefers [25,29]. Same protective
+# rules as the shipped drop2 recipes (full_attention protected, min_gap 2).
+name: qwen35-4b-drop2-explicit-2529
+base_dir: /home/daniel/m0/registry/Qwen3.5-4B
+out_dir: /home/daniel/m0/runs/qwen35-4b-drop2-explicit-2529
+llamacpp_dir: /home/daniel/llama.cpp
+ops:
+  - op: drop_layers
+    count: 2
+    strategy: explicit
+    indices: [25, 29]
+    min_gap: 2
+  - op: quantize
+    quants: [Q4_K_M]

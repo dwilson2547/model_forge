@@ -38,6 +38,22 @@ def _drop_indices(n_layers, types, op, scores=None):
     if op.count > len(droppable):
         raise ValueError(f"cannot drop {op.count} layers: only {len(droppable)} are droppable")
 
+    if op.strategy == "explicit":
+        if len(op.indices) != op.count:
+            raise ValueError(
+                f"explicit drop: op.count={op.count} does not match "
+                f"indices={list(op.indices)} — make count and the pick list agree")
+        picked = []
+        for i in sorted(op.indices):
+            if i not in droppable:
+                raise ValueError(
+                    f"explicit drop {i} is not droppable (edge-protected or "
+                    f"type-protected: {types[i] if 0 <= i < len(types) else 'out of range'})")
+            if any(abs(i - j) < op.min_gap for j in picked):
+                raise ValueError(f"explicit drop {i} violates min_gap={op.min_gap}")
+            picked.append(i)
+        return picked
+
     def spaced_ok(picked, cand):
         return all(abs(cand - j) >= op.min_gap for j in picked)
 
