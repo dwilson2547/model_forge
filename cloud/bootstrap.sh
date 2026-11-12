@@ -18,6 +18,12 @@ if command -v apt-get > /dev/null; then
     libcurl4-openssl-dev rsync > /dev/null
 fi
 nvidia-smi > /dev/null || { echo "FATAL: no GPU visible"; exit 1; }
+# Some images ship gcc N with only g++ N-1, so `gcc` can't compile C++ (no cc1plus) and
+# nvcc, which drives gcc, fails. Install the g++ matching the default gcc.
+GCC_MAJ=$(gcc -dumpversion | cut -d. -f1)
+echo 'int main(){}' | gcc -x c++ - -o /tmp/cxx-check 2> /dev/null || {
+  echo "gcc $GCC_MAJ cannot compile C++: installing g++-$GCC_MAJ"
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "g++-$GCC_MAJ" > /dev/null; }
 # torch wheel: the desktop runs 2.15.0+cu132. Use it when the driver allows; older
 # drivers get the nearest wheel and a loud parity warning (Run 0 then measures it).
 DRV_CUDA=$(nvidia-smi | sed -n 's/.*CUDA Version: \([0-9]*\.[0-9]*\).*/\1/p' | head -1)
