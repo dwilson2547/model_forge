@@ -88,15 +88,15 @@ Fixes + fired experiments recorded in design §0j.
       regrade §0h board if raw generations survive, else on next run
 - [ ] Loop metric: per-temp loop rate over seeds; §0g wording fix
 - [ ] KL-divergence vs base in the floor tier (tracked in M2 above)
-- [x→in flight] Baseline row: unsliced 27B imatrix IQ3_M/IQ3_XS/Q3_K_M vs the 12.5 GiB
-      target (Altra job `~/m0/baseline-27b/`, imatrix → quants → 3-corpus floor) — IQ3_M published 2026-11-11
-      as `dwilson2547/Qwen3.8-27B-IQ3_M` (card + Apache-2.0 + floors; bf16-source pair
-      pending the chain, then update-or-annotate). Status 2026-11-12: the 24.4h BF16
-      imatrix is COMPLETE (530/530 chunks, intact); the original driver died at [3/5]
-      on a nonexistent `--merge` flag and was re-driven (`27b-bf16-resume.sh`,
-      gotcha recorded §0j.4.3) — srcbf16 quants + floors in flight, rows pending.
-      NOTE the pending follow-ups: unrepaired-[25,29] floor row (§0j.7), and once the
-      chain exits delete `src-bf16/` (54 GB, reproducible download).
+- [x] Baseline row: unsliced 27B imatrix IQ3_M/IQ3_XS/Q3_K_M vs the 12.5 GiB
+      target — **COMPLETE 2026-11-12 (§0j.4)**: honest BF16 chain landed
+      IQ3_M 6.129/8.697/2.565 @11.9 GiB and Q3_K_M 6.247/8.761/2.593 @12.6 GiB;
+      do-nothing confirmed in-band (Q3_K_M strictly dominated);
+      srcbf16-IQ3_XS blocked on imatrix coverage (cheap fix queued: `--exclude-weights
+      blk.64.attn_k.weight`); quant-from-quant penalty measured at ~+0.04; HF card
+      annotated with gen-1 vs honest-chain comparison. Cleanup pending user go:
+      delete `src-bf16/` (54 GB) — but note an IQ3_XS retry or imatrix rework would
+      need it re-downloaded, ~54 GB.
 - [ ] Seed replicate of the kept repair arm; rsLoRA/fixed-α rank re-probe (repeat the
       r2fix arm with a second seed when its result lands)
 - [x] `prune_heads` fails loudly under `attn_output_gate` (real fix deferred until a

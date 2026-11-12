@@ -802,26 +802,50 @@ Escalations that remain, in rough cost order: (1) change the wound — corrected
 and route around it (task-level repair via the SFT line already proved 0.73 composite
 at v3); (3) full-weight repair — still out of reach locally (~27 GiB optimizer for bf16).
 
-### 0j.4 — 27B do-nothing baseline (in flight 2026-11-11): IQ3_M row landed; two gotchas
+### 0j.4 — 27B do-nothing baseline: COMPLETE (2026-11-12); do-nothing confirmed in-band
 
-Landed so far (three-corpus floor, box `~/m0/baseline-27b/`):
+Final table (three-corpus floor, box `~/m0/baseline-27b/`; honest chain = BF16 source,
+24.4h/530-chunk imatrix, labels `27b-*-srcbf16` in `multicorpus-results.jsonl`):
 
 | 27B variant | size | wikitext | fineweb | code |
 |---|---:|---:|---:|---:|
 | Q8_0 (near-lossless reference) | 27 GiB | 5.89 | 8.36 | 2.50 |
 | UD-Q4_K_M (unsloth dynamic) | 15.3 GiB | 5.92 | 8.45 | 2.52 |
-| IQ3_M (imatrix, Q8_0-requant) | 11.9 GiB | 6.17 | 8.74 | 2.56 |
+| IQ3_M from BF16 (imatrix) | 11.9 GiB | 6.129 | 8.697 | 2.565 |
+| Q3_K_M from BF16 | 12.6 GiB | 6.247 | 8.761 | 2.593 |
+| IQ3_M, Q8_0-requant (gen-1, published §0j.6) | 11.9 GiB | 6.165 | 8.739 | 2.561 |
 
-Early read: the do-nothing hypothesis is live — unsliced 27B at 3-bit IQ3_M sits in the
-5080-comfort size band with wiki +0.28 / fw +0.38 / code +0.06 over the Q8 reference,
-i.e. modest damage at 11.9 GiB. Every sliced+repaired 27B candidate must beat this.
+Dropped rows, with reasons: Q8-derived Q3_K_M/IQ3_XS (masked driver failures, gotcha
+2); srcbf16-IQ3_XS (imatrix coverage gap, gotcha 1 — confirmed in-flight, not just
+predicted: the BF16 imatrix also lacks `blk.64.attn_k` for very-low-bit use).
 
-Gotchas recorded while the BF16-source chain finishes:
+**Verdict — the do-nothing hypothesis holds.** An unsliced 27B at 3-bit competes in
+the 5080-comfort band: IQ3_M-from-BF16 fits at 11.9 GiB with total damage over the Q8
+reference of just wiki +0.24 / fw +0.34 / code +0.07 — far better than any plausible
+sliced-and-repaired 27B can be *guaranteed* to reach, and the §0j.5 probe showed it
+acing the flagship triage task in exactly this quant. Q3_K_M is strictly dominated
+here (bigger at 12.6 GiB AND worse on all three corpora — the imatrix is what makes
+IQ3_M pull ahead); every future 27B slice must beat the IQ3_M row, not the Q3_K_M
+one. Caveat on "comfort": ±16k ctx is the practical ceiling (15.7/16.3 GiB VRAM,
+§0j.5); comfortable long-ctx or roomy KV would want either IQ3_XS (~10.9 GiB, blocked
+on the imatrix gap — cheap fix to try: `llama-quantize --exclude-weights
+blk.64.attn_k.weight`, one tensor without importance data; else a longer imatrix
+pass) or an actual slice.
+
+**Measured quant-from-quant penalty (near-lossless Q8_0 hop): +0.036 wiki / +0.042
+fineweb / −0.004 code** — the published gen-1 IQ3_M (Q8_0 → IQ3_M, `--allow-
+requantize`) sits within ~0.04 of the honest BF16-derived quant at the same size.
+Practical conclusion: for near-lossless intermediate formats, quant-from-quant is
+empirically negligible at IQ3_M scale here; the "always quantize from the full model"
+rule is directionally right but costs <0.05 PPL in this instance. Card annotated
+(§0j.6 repo) rather than re-published — the shipped artifact is effectively at parity.
+
+Gotchas recorded during the chain:
 1. **The 1.2M-char imatrix corpus under-covers the model**: llama-quantize refuses
    IQ3_XS with "Missing importance matrix for blk.64.attn_k.weight" (the last chunks
-   of the mix presumably didn't complete for the tail tensors). The BF16 imatrix runs
-   over the same file — if its coverage is similarly short, srcbf16-IQ3_XS will fail
-   the same way; remediation is a longer imatrix pass.
+   of the mix presumably didn't complete for the tail tensors). **Confirmed 2026-11-12**:
+   the BF16 imatrix (530/530 chunks, survey-complete except this tensor) failed
+   IQ3_XS identically. Remediation options recorded in the §0j.4 verdict.
 2. **The Q8-requant driver masked its own failures** (`| tail` without pipefail, the
    same footgun that bit the stub-quants — pipefail was added to the bf16 driver but
    not back-ported to 27b-baseline-driver.sh). Q3_K_M requantized in an implausible
