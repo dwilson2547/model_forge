@@ -192,8 +192,27 @@ keeps surgery + build + eval. Issue docs: `2026_11_07_llamacpp_cpu_finetune.md`,
 
 ## M5 — MoE making
 
-- [ ] franken-MoE: mergekit on aarch64 (fallback: own router-assembly script) ⬜
+- [ ] franken-MoE v1 from the Qwen3.5-4B repaired siblings (x86 desktop, mergekit):
+      experts must be same-layer-count/same-shape — use the 30-layer sliced+repaired
+      shelf only ([24,28]-repair arms + [25,29]-repair from Pass 1; diet variants give
+      the experts their measured domain biases per 0d). Router: mergekit-moe static
+      routing; eval on the 3-corpus floor + the chat board
 - [ ] moeify recipe + recovery; llama.cpp MoE LoRA training feasibility ⬜
+- [ ] (stretch) Second forge family: Gemma — port the forge for dense Gemma stock
+      (arch/ops: simpler than qwen3.5 — dense full-attention, no linear/full hybrid;
+      classic LoRA target list; Gemma-turn-template SFT variant is the real work —
+      the v3 think-open/close fix was Qwen-template-specific). Licensing: Gemma Terms
+      of Use, NOT Apache — Gemma license text travels with derivatives + attribution +
+      use-policy acknowledgment before any publish (use the publish checklist, new
+      license lane). HF repos are gated: Daniel must accept Gemma terms with his
+      account before the box token can pull weights
+- [ ] (stretch) MoE-native surgery for gemma-family A4B-class models: expert pruning
+      (drop least-loaded expert per layer, router renormalizes — the MoE analog of
+      layer-drop, far more contained wound) and expert width-slicing; layer-drop through
+      MoE blocks is the known-bad path (nemotron intuition). First target: gemma 26B
+      A4B — at ~3.3 bpw it may already fit the 5080 (~11-12 GiB, only 4B active, so
+      decode stays fast); the imatrix machinery translates as-is. Measured question:
+      expert-prune 26B A4B -> A3B-class with how much floor damage?
 
 ## v4 SFT diet (planned 2026-11-11; user paused pending external review suggestions)
 
