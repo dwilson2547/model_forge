@@ -23,10 +23,11 @@ def load_model(base_dir):
     raise RuntimeError(f"could not load {base_dir} with any Auto class: {errors}")
 
 
-def run_recipe(recipe_path, eval_prompt=None, eval_ppl_file=None, ppl_chunks=24):
+def run_recipe(recipe_path, eval_prompt=None, eval_ppl_file=None, ppl_chunks=24,
+               build_model=True):
     from .recipe import load_recipe, Quantize
     from .ops import apply_recipe
-    from .build import build
+    from .build import build, save_hf
     from . import evaluate
 
     recipe = load_recipe(recipe_path)
@@ -47,8 +48,16 @@ def run_recipe(recipe_path, eval_prompt=None, eval_ppl_file=None, ppl_chunks=24)
     print(f"[pipeline] surgery done: {n_params_after/1e9:.2f}B params "
           f"({report['param_delta']:.3f}x of base)", flush=True)
 
-    # The GGUF convert must run under this interpreter — the venv has torch; system python doesn't.
-    report = build(recipe, report, model, tok, python=sys.executable)
+    if not build_model:
+        # surgery only: save the edited HF dir and stop here — convert/quantize/eval
+        # happen on the build host (e.g. x86 desktop slices, box builds). Note
+        # apply_drop/explicit is pure tensor bookkeeping, so the edited checkpoint
+        # is byte-identical to running the surgery on any other architecture.
+        hf_dir = save_hf(model, tok, Path(recipe.out_dir) / "hf-edited")
+        report["build"] = {"hf_edited": str(hf_dir), "surgery_only": True}
+    else:
+        # The GGUF convert must run under this interpreter — the venv has torch; system python doesn't.
+        report = build(recipe, report, model, tok, python=sys.executable)
     del model
 
     qop = next((o for o in recipe.ops if isinstance(o, Quantize)), None)
@@ -78,10 +87,12 @@ def main():
     ap.add_argument("--ppl-file", help="fixed text corpus for perplexity")
     ap.add_argument("--prompt-file", help="prompt file for speed runs (default: ppl file)")
     ap.add_argument("--chunks", type=int, default=24)
+    ap.add_argument("--no-build", action="store_true",
+                    help="surgery only: save the edited HF dir, skip GGUF convert/quantize/eval")
     args = ap.parse_args()
 
     run_recipe(args.recipe, eval_prompt=args.prompt_file, eval_ppl_file=args.ppl_file,
-               ppl_chunks=args.chunks)
+               ppl_chunks=args.chunks, build_model=not args.no_build)
 
 
 if __name__ == "__main__":
