@@ -1,8 +1,8 @@
 # forge-cloud: the rented-GPU hot loop (Brev lane)
 
 Doctrine (design §0j.8): rent H100-class time where it saves hours. The budget is about
-$20–30 a month; at the ~$1.70/hr the §0j.8 break-even math used, that is ~12–17
-GPU-hours (⚠ unverified: check Brev's live H100 price before relying on it). Local
+$20–30 a month: at $1.66/hr (cheapest Brev A100 the user saw 2026-11-12), that is
+~12–18 GPU-hours. Local
 stays: the 5080 for LM Studio probes and 4B/9B dev, the Ampere for archive, staging and
 serial evals where wall-clock doesn't matter.
 
@@ -13,7 +13,10 @@ set.
 
 ## 0. Instance
 
-1× H100 80GB. The image needs the CUDA toolkit (`nvcc`): bootstrap stops if it's missing.
+1× A100 **80GB** or H100 80GB. Full-weight Run 1 needs ~40 GB before activations, so a
+40GB A100 only fits the QLoRA runs. On an A100, run bootstrap as
+`CUDA_ARCH=80 bash ~/forge/cloud/bootstrap.sh`; the default 90 builds llama.cpp for H100
+only. The image needs the CUDA toolkit (`nvcc`): bootstrap stops if it's missing.
 A driver reporting CUDA ≥ 13.2 gets the desktop's exact torch (2.15.0+cu132). Older
 drivers get the nearest wheel and a warning, and Run 0 then also tests that torch.
 
