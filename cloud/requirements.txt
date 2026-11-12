@@ -1,11 +1,23 @@
-# forge hot-loop deps (cuda torch is installed separately by bootstrap.sh)
-transformers
-accelerate
-peft
-bitsandbytes
-datasets
-sentencepiece
-tokenizers
-huggingface_hub[hf_transfer]
-gguf
-numpy
+# forge hot-loop deps, pinned to the desktop forge-gpu-env that produced every §0j row
+# (pip freeze 2026-11-12). Port parity (Run 0) assumes these exact versions; bump them
+# together with a fresh parity run, never one at a time.
+# torch is installed separately by bootstrap.sh (CUDA-index wheel chosen from the driver).
+transformers==5.22.2
+accelerate==1.15.0
+peft==0.21.2
+bitsandbytes==0.50.2
+# fast GatedDeltaNet kernels: without these the 24 linear-attention layers of a
+# Qwen3.5 slice run transformers' torch fallback
+fla-core==0.6.0
+flash-linear-attention==0.6.0
+datasets==5.1.0
+tokenizers==0.23.3
+safetensors==0.8.0
+huggingface_hub==2.4.0
+hf-xet==1.8.0
+einops==0.8.2
+numpy==2.5.4
+PyYAML==6.0.3
+Jinja2==3.1.6
+# gguf comes from the pinned llama.cpp checkout (convert_hf_to_gguf.py imports its own
+# gguf-py), so the converter and the quantizer always match.

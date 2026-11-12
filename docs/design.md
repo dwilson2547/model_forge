@@ -795,6 +795,11 @@ low LR. Dose joins the dead levers: **mixer coverage, merge shift, rank, lr, die
 dose** — every knob that can be reached at this LoRA scale is now measured flat or
 harmful, and the 2-epoch recipe sits at the peak.
 
+*Scope correction (2026-11-12, §0j.9):* this arm repeated the same 12M-char striped
+draw 4×. It tested **repeated epochs**, not **fresh tokens**: every arm in §0f–§0j used
+~29% of the 40.8M-char `mixed.train.txt`. "Dose is dead" holds for epochs only. The
+fresh-data arm (full file, 1 epoch) is §0j.9.
+
 Standing verdict for the ~+1.7–2.0 fineweb wall at drop2/r16 scale: **genuine surgical
 damage that rank-16 residual adapters cannot relearn from a 512-ctx LM objective.**
 Escalations that remain, in rough cost order: (1) change the wound — corrected pick
@@ -939,6 +944,12 @@ scorer for picks; (b) the [25,29] arm joins the M5 franken-MoE expert shelf; (c)
 unrepaired-[25,29] floor row would separate "smaller wound" from "better repair" —
 queued as a cheap box follow-up, not blocking anything.
 
+*Resolved 2026-11-12 (§0j.9): **better repair, not a smaller wound.** Unrepaired [25,29]
+floors 12.82 / 13.95 / 3.61 (f16), against [24,28]'s 12.82 / 13.55 / 3.57. The corrected
+picks start equal on wiki and worse on fineweb, but heal further (fineweb −2.06 vs
+−1.45). The fixed scorer is finding layers whose loss is more repairable, not layers
+whose loss is smaller.*
+
 ### 0j.8 — Infrastructure doctrine: hybrid local + rented (decided 2026-11-12)
 
 Direct measurement forced this: the 24.4h BF16 imatrix cost ~$1.00–1.50 in Altra
@@ -949,7 +960,7 @@ at parity on cost and strictly worse on wall-clock, queue depth, and babysitting
 we don't have that workload and may never.
 
 Split adopted:
-- **Cloud (Brev H100 80GB, spot-tolerant)**: the hot loop. 27B imatrix/quants/floor
+- **Cloud (Brev H100 80GB, on-demand; see §0j.9)**: the hot loop. 27B imatrix/quants/floor
   production, full-weight repair (previously "out of reach locally" — a 4B slice
   + AdamW fits one 80GB card), 27B QLoRA, future MoE training. Cost cap ~$5/run;
   every run checkpoints + pushes artifacts to HF before exit.
@@ -963,6 +974,55 @@ Split adopted:
 (port parity run 0, full-weight plateau test run 1) in `cloud/README.md`. The old
 "hire the wall-breaking full-weight repair" escalation in §0f is now affordable
 and is the first real cloud experiment.
+
+### 0j.9 — Cloud-kit review + the two free pre-cloud checks (2026-11-12)
+
+External review of the §0j.8 kit before any rental spend found it not runnable as
+committed. Fixed the same day:
+
+1. **Run 1 had no trainer.** `recover_gpu.py` was QLoRA-only. Added `--full`: fp32
+   master weights, bf16 autocast, AdamW8bit, default lr 1e-5 (unmeasured, so sweep it),
+   output bf16 `hf-recovered/` with no merge.
+2. **Bootstrap didn't reproduce the env.** It installed torch from the cu121 index with
+   unpinned deps and no `flash-linear-attention`, so the GatedDeltaNet layers would have
+   run the slow torch path. `requirements.txt` is now pinned to the desktop freeze;
+   torch is chosen from the driver (2.15.0+cu132 when allowed); `causal-conv1d` is an
+   optional source build. That last one is missing on the desktop too: every local run
+   used transformers' reference conv.
+3. **llama.cpp pinned** to the Altra's `e95426f`, so cloud and box floors share a build.
+   Run 0a measures the remaining CPU-vs-CUDA eval offset on the unrepaired slice.
+4. **The floor ran only on the Altra.** `multicorpus.py`/`evaluate.py` take
+   `FORGE_LLAMA`, `FORGE_DATA`, `FORGE_RESULTS`, `FORGE_NGL`, `FORGE_THREADS`; the
+   defaults are unchanged.
+5. **Staging didn't work.** `wiki.test.txt` only existed on the Altra (copied to the
+   desktop). The [25,29] slice wasn't staged. The rsync's `../` meant the whole `ai/`
+   folder.
+6. **"Spot-safe" wasn't implemented.** Nothing pushed to HF, and `--resume` reloaded the
+   adapter but restarted the schedule at step 0, which silently trains extra epochs
+   (§0j.3 shows those overfit). Checkpoints now carry `train_state.pt` (optimizer,
+   scheduler, step, shuffle order, data signature). Resume refuses a different data draw.
+   Verified on a tiny random Qwen3.5: resumed runs match uninterrupted ones to bf16
+   rounding, for both LoRA and full. `--push-repo` uploads artifacts. Doctrine is now
+   on-demand.
+7. **Held-out loss.** `--val-frac` (seeded split), `--eval-every`, and
+   `--stop-on-val-rise K`. The dose-arm overfit was invisible in train loss.
+
+Free checks run before renting:
+
+- **Unrepaired [25,29] floor** (Altra, f16 / Q4_K_M):
+
+  | unrepaired | wikitext | fineweb | code |
+  |---|---:|---:|---:|
+  | [24,28] f16 (§0j) | 12.82 | 13.55 | 3.57 |
+  | [25,29] f16 | 12.823 | 13.954 | 3.610 |
+  | [25,29] Q4_K_M | 13.357 | 14.401 | 3.673 |
+
+  Better repair, not a smaller wound (§0j.7 annotated).
+- **Fresh-data arm `drop2-repair-2529-fresh1e`** (desktop, in flight). The [25,29] slice,
+  QLoRA r16 @ 1e-4, all targets, seed 1234, the **full** 40.8M-char corpus (9.63M tokens,
+  3.1× the old per-epoch draw), 1 epoch, `--val-frac 0.01`. It answers whether the wall
+  is data starvation, and it is the like-for-like comparator for cloud Run 1 (same data
+  and split, LoRA → full weights).
 
 ## 5. Milestones
 

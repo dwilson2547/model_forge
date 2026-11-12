@@ -7,18 +7,25 @@ plateau rerun on the 5080, 27B 3-bit do-nothing baseline on the Altra. Next: v4 
 ## Cloud lane (Brev H100 — doctrine adopted 2026-11-12, design §0j.8)
 
 - [x] Doctrine decided: hybrid local + rented. Cloud = hot loop (27B production,
-      full-weight repair, MoE training, ~$5/run cap, spot-safe checkpoint-to-HF);
+      full-weight repair, MoE training), on-demand, ~$20–30/month budget;
       desktop = LM Studio probes + 4B/9B dev; Ampere = archive/staging/serial evals
-      only (no 24h CPU slogs on the critical path). Port 6000-buy rejected on
+      only (no 24h CPU slogs on the critical path). Pro 6000 purchase rejected on
       break-even math (~4,000+ rental hours needed).
-- [x] `cloud/` kit in repo: bootstrap.sh (venv + CUDA llama.cpp + pinned deps) + runbook.
-- [ ] User: spin up first Brev H100 instance (account/SSH is user-side).
-- [ ] Run 0 — port parity (~$0.50): re-run the [25,29] repair arm, seed 1234, expect
-      loss 2.625→2.230 and floors ≈ 8.031/11.894/3.485 (§0j.7). Within noise ⇒ port verified.
-- [ ] Run 1 — plateau escalation (~$1-2): FULL-WEIGHT repair of the [25,29] slice,
-      same 2-epoch protocol (+1-epoch companion vs dose-overfit risk). Verdict rule:
-      fineweb substantially <11.894 ⇒ the wall was a rank-16 ceiling and cloud becomes
-      the default repair lane; ≈11.9 ⇒ wall is genre damage, route repairs via SFT.
+- [x] `cloud/` kit reviewed and fixed 2026-11-12 (design §0j.9): pinned env + fla,
+      llama.cpp @ e95426f, portable floor scripts, staging fixed, `--full`,
+      `--val-frac`/`--stop-on-val-rise`, exact `--resume`, `--push-repo`.
+- [x] Unrepaired [25,29] floor: 12.82 / 13.95 / 3.61. Better repair, not a smaller
+      wound (§0j.9).
+- [ ] Fresh-data arm `drop2-repair-2529-fresh1e` (desktop, running 2026-11-12): floor it
+      on the Altra when it lands (f16 + Q4_K_M), and record it in §0j.9. Compare against
+      Pass-1 (8.031 / 11.894 / 3.485) and read the val curve.
+- [ ] User: spin up the first Brev H100 instance (account/SSH is user-side).
+- [ ] Run 0a: CUDA floor of the unrepaired slice vs the Altra row above (eval offset).
+- [ ] Run 0b: port parity. §0j.7 arm, seed 1234, no `--val-frac`. Expect loss
+      2.625→~2.230 and floors ≈ 8.031 / 11.894 / 3.485 after the 0a offset.
+- [ ] Run 1: full-weight repair, lr 1e-5 and 3e-6, same data and split as fresh1e
+      (full file, 1 epoch, val-frac 0.01). Fineweb clearly below fresh1e ⇒ the wall was
+      LoRA capacity. The same ⇒ the wall is the wound.
 - [ ] After parity: move 27B quants/imatrix/floor production to cloud; keep the
       src-bf16/ dir on the box until the IQ3_XS retry question is settled (user call).
 

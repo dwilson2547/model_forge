@@ -7,9 +7,15 @@ printed on stdout as "[ Prompt: X t/s | Generation: Y t/s ]"; stdin must be
 /dev/null or it hangs.
 """
 
+import os
 import re
 import subprocess
 from pathlib import Path
+
+# Host knobs for the floor (defaults = the Altra protocol). On a CUDA host set
+# FORGE_NGL=99 so llama-perplexity offloads every layer; FORGE_THREADS sizes the CPU side.
+NGL = os.environ.get("FORGE_NGL", "")
+THREADS = int(os.environ.get("FORGE_THREADS", "32"))
 
 
 def _bin(llamacpp_dir, name):
@@ -37,11 +43,14 @@ def speed(model_gguf, prompt_file, llamacpp_dir, n=64, t=32, tb=96):
             "threads": t, "threads_batch": tb}
 
 
-def ppl(model_gguf, data_file, llamacpp_dir, chunks=24, threads=32):
+def ppl(model_gguf, data_file, llamacpp_dir, chunks=24, threads=None):
     """Perplexity via llama-perplexity. Fixed corpus + chunk count = comparable scores."""
+    cmd = [_bin(llamacpp_dir, "llama-perplexity"), "-m", str(model_gguf),
+           "-f", str(data_file), "--chunks", str(chunks), "-t", str(threads or THREADS)]
+    if NGL:
+        cmd += ["-ngl", NGL]
     proc = subprocess.run(
-        [_bin(llamacpp_dir, "llama-perplexity"), "-m", str(model_gguf),
-         "-f", str(data_file), "--chunks", str(chunks), "-t", str(threads)],
+        cmd,
         stdin=subprocess.DEVNULL, capture_output=True, text=True,
     )
     text = proc.stdout + proc.stderr

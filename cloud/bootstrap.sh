@@ -1,37 +1,92 @@
 #!/bin/bash
-# forge-cloud bootstrap: fresh Brev H100 instance -> ready to train + quantize + floor.
-# Safe to re-run (idempotent-ish). ~5-10 min; llama.cpp CUDA build is the long pole.
+# forge-cloud bootstrap: fresh rented CUDA instance -> ready to train + quantize + floor.
+# Idempotent: re-running skips what is already in place. Run from anywhere:
+#   bash ~/forge/cloud/bootstrap.sh
+# Produces ~/forge-env (venv), ~/llama.cpp (pinned, CUDA), ~/forge.env (paths for the
+# floor scripts). The llama.cpp CUDA build is the long pole.
 set -euo pipefail
 
-echo "=== [1/4] system deps ==="
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+# Same commit as the Altra build that produced every floor row (TODO M0 pin).
+LLAMA_SHA=e95426f16982054c379ca7bdc8186996dd22f0fe
+CUDA_ARCH="${CUDA_ARCH:-90}"            # 90 = H100; 89 = L40S/4090; 80 = A100
+
+echo "=== [1/6] system deps ==="
 if command -v apt-get > /dev/null; then
   sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-    build-essential cmake curl git python3-venv python3-pip ccache libcurl4-openssl-dev > /dev/null
+    build-essential cmake curl git python3-venv python3-pip python3-dev ccache \
+    libcurl4-openssl-dev rsync > /dev/null
+fi
+nvidia-smi > /dev/null || { echo "FATAL: no GPU visible"; exit 1; }
+command -v nvcc > /dev/null || [ -x /usr/local/cuda/bin/nvcc ] || {
+  echo "FATAL: no nvcc (CUDA toolkit) — llama.cpp's CUDA build needs it; pick an image with the toolkit"; exit 1; }
+export PATH="/usr/local/cuda/bin:$PATH"
+
+# torch wheel: the desktop runs 2.15.0+cu132. Use it when the driver allows; older
+# drivers get the nearest wheel and a loud parity warning (Run 0 then measures it).
+DRV_CUDA=$(nvidia-smi | sed -n 's/.*CUDA Version: \([0-9]*\.[0-9]*\).*/\1/p' | head -1)
+ver_ge() { [ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -1)" = "$2" ]; }
+if ver_ge "$DRV_CUDA" 13.2; then TORCH="torch==2.15.0"; IDX=cu132
+elif ver_ge "$DRV_CUDA" 13.0; then TORCH="torch==2.14.1"; IDX=cu130
+else TORCH="torch==2.14.1"; IDX=cu126; fi
+echo "driver CUDA $DRV_CUDA -> $TORCH ($IDX)"
+[ "$IDX" = cu132 ] || echo "WARNING: not the desktop's torch 2.15.0+cu132 — Run 0 parity is now also testing this torch"
+
+echo "=== [2/6] python env -> ~/forge-env ==="
+[ -d ~/forge-env ] || python3 -m venv ~/forge-env
+source ~/forge-env/bin/activate
+python3 -m pip install -q --upgrade pip wheel setuptools
+pip install -q "$TORCH" --index-url "https://download.pytorch.org/whl/$IDX"
+pip install -q -r "$REPO/cloud/requirements.txt"
+
+echo "=== [3/6] causal-conv1d (optional fast conv kernel; source build) ==="
+# Not installed on the desktop either (transformers warns and uses the torch reference
+# conv). Worth having on paid time; a failed build is not fatal.
+if ! python3 -c "import causal_conv1d" 2> /dev/null; then
+  TORCH_CUDA_ARCH_LIST="${CUDA_ARCH:0:1}.${CUDA_ARCH:1}" MAX_JOBS="$(nproc)" \
+    pip install -q --no-build-isolation causal-conv1d==1.7.0 \
+    || echo "WARNING: causal-conv1d build failed — continuing on the torch reference conv"
 fi
 
-nvidia-smi || { echo "FATAL: no GPU visible"; exit 1; }
-
-echo "=== [2/4] python env -> forge-env ==="
-python3 -m venv forge-env
-source forge-env/bin/activate
-python3 -m pip install -q --upgrade pip
-pip install -q torch --index-url https://download.pytorch.org/whl/cu121
-pip install -q -r "$(dirname "$0")/requirements.txt"
-
-echo "=== [3/4] llama.cpp with CUDA ==="
+echo "=== [4/6] llama.cpp @ ${LLAMA_SHA:0:7} with CUDA ==="
+if [ ! -d ~/llama.cpp/.git ]; then
+  git init -q ~/llama.cpp
+  git -C ~/llama.cpp remote add origin https://github.com/ggml-org/llama.cpp
+fi
+if [ "$(git -C ~/llama.cpp rev-parse HEAD 2> /dev/null || true)" != "$LLAMA_SHA" ]; then
+  git -C ~/llama.cpp fetch -q --depth 1 origin "$LLAMA_SHA"
+  git -C ~/llama.cpp checkout -q "$LLAMA_SHA"
+  rm -rf ~/llama.cpp/build
+fi
 if [ ! -x ~/llama.cpp/build/bin/llama-perplexity ]; then
-  git clone --depth 1 https://github.com/ggml-org/llama.cpp ~/llama.cpp
-  cmake -S ~/llama.cpp -B ~/llama.cpp/build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=90 \
-    -DCMAKE_BUILD_PARALLEL_LEVEL=$(nproc) > /dev/null
-  cmake --build ~/llama.cpp/build --config Release -j $(nproc)
+  cmake -S ~/llama.cpp -B ~/llama.cpp/build -DGGML_CUDA=ON \
+    -DCMAKE_CUDA_ARCHITECTURES="$CUDA_ARCH" -DCMAKE_BUILD_TYPE=Release > /dev/null
+  cmake --build ~/llama.cpp/build --config Release -j "$(nproc)" \
+    --target llama-perplexity llama-quantize llama-imatrix llama-cli > /dev/null
 fi
 
-echo "=== [4/4] sanity ==="
-python3 - <<'EOF'
-import torch
-assert torch.cuda.is_available(), "CUDA not available to torch"
-print(f"torch {torch.__version__}, GPU: {torch.cuda.get_device_name(0)}, "
-      f"{torch.cuda.get_device_properties(0).total_memory / 2**30:.0f} GiB")
+echo "=== [5/6] ~/forge.env ==="
+mkdir -p ~/forge-data ~/forge-runs
+cat > ~/forge.env <<EOF
+# sourced by every cloud session: floor scripts read these (surgery/multicorpus.py)
+export FORGE_LLAMA=\$HOME/llama.cpp
+export FORGE_DATA=\$HOME/forge-data
+export FORGE_RESULTS=\$HOME/forge-runs/multicorpus-results.jsonl
+export FORGE_NGL=99
+export FORGE_THREADS=$(nproc)
+export PATH=/usr/local/cuda/bin:\$PATH
+source \$HOME/forge-env/bin/activate
 EOF
-~/llama.cpp/build/bin/llama-perplexity --version | head -1
-echo "BOOTSTRAP DONE"
+
+echo "=== [6/6] sanity ==="
+python3 - <<'EOF'
+import importlib.util, torch
+assert torch.cuda.is_available(), "CUDA not available to torch"
+p = torch.cuda.get_device_properties(0)
+print(f"torch {torch.__version__}, GPU: {p.name}, {p.total_memory / 2**30:.0f} GiB")
+for mod in ("fla", "causal_conv1d", "bitsandbytes", "peft"):
+    print(f"  {mod:14s} {'ok' if importlib.util.find_spec(mod) else 'MISSING'}")
+assert importlib.util.find_spec("fla"), "flash-linear-attention missing: slow GatedDeltaNet path"
+EOF
+~/llama.cpp/build/bin/llama-perplexity --version 2>&1 | head -1
+echo "BOOTSTRAP DONE — next: source ~/forge.env"

@@ -23,9 +23,24 @@ Review round 2 fixes (docs/issues/2026_11_11_review_findings_round2.md):
   truncated <|im_end|>) and skip counts are reported per kind (finding 4).
 - --save-every 0 disables periodic checkpoints only; final save + merge always run
   (round-1 minor: NameError on `report`).
+
+Cloud-lane additions (design §0j.8, review 2026-11-12):
+- --full: full-weight repair (no LoRA). fp32 master weights + bf16 autocast + AdamW8bit
+  (~40 GB for a 4B slice before activations — an 80 GB card, not the 5080). Default lr
+  drops to 1e-5; output is the bf16 model in hf-recovered/ (no merge step).
+- --val-frac: hold out a seeded fraction of the training examples and log held-out loss
+  every --eval-every optimizer steps; --stop-on-val-rise K stops after K consecutive
+  evals worse than the best (the 4-epoch dose arm's overfit was invisible in train loss).
+- Checkpoints carry train_state.pt (optimizer, scheduler, step, shuffle order, data
+  signature) and --resume continues the SAME run — it used to restart the schedule at
+  step 0 on top of the loaded adapter, i.e. silently train extra epochs.
+- --push-repo uploads the run's artifacts to a private HF repo after the results json is
+  written (token from HF_TOKEN / the cached login, never from a file in the repo).
 """
 
 import argparse
+import fnmatch
+import hashlib
 import json
 import random
 import time
@@ -71,6 +86,56 @@ def _merge_to_hf(hf_dir, adapter_dir, out_dir):
     return hf_out
 
 
+PUSH_PATTERNS = ["hf-recovered/*", "recover-results.json", "merge-results.json"]
+PUSH_PATTERNS_LORA = ["ckpt/final/*"]          # the adapter itself (small)
+
+
+def _push(out_dir, repo, full, dry_run=False):
+    """Upload the run's shippable artifacts to a private HF model repo."""
+    out_dir = Path(out_dir)
+    patterns = PUSH_PATTERNS + ([] if full else PUSH_PATTERNS_LORA)
+    files = sorted(p.relative_to(out_dir).as_posix() for p in out_dir.rglob("*")
+                   if p.is_file() and any(fnmatch.fnmatch(p.relative_to(out_dir).as_posix(), pat)
+                                          for pat in patterns))
+    total = sum((out_dir / f).stat().st_size for f in files)
+    print(f"[recover-gpu] push {'(dry run) ' if dry_run else ''}-> {repo}: "
+          f"{len(files)} files, {total / 2**30:.2f} GiB", flush=True)
+    for f in files:
+        print(f"[recover-gpu]   {f}", flush=True)
+    if dry_run:
+        return files
+    from huggingface_hub import HfApi
+    api = HfApi()
+    api.create_repo(repo, private=True, exist_ok=True)
+    api.upload_folder(folder_path=str(out_dir), repo_id=repo, allow_patterns=patterns,
+                      commit_message=f"forge run {out_dir.name}")
+    print(f"[recover-gpu] pushed -> https://huggingface.co/{repo}", flush=True)
+    return files
+
+
+def _env_report():
+    import importlib.metadata as md
+    env = {"torch": torch.__version__,
+           "cuda": torch.version.cuda,
+           "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}
+    for pkg in ("transformers", "peft", "bitsandbytes", "flash-linear-attention"):
+        try:
+            env[pkg] = md.version(pkg)
+        except md.PackageNotFoundError:
+            env[pkg] = None
+    return env
+
+
+def _data_signature(examples, n_val):
+    """Identity of the exact training set — resume refuses a different draw."""
+    h = hashlib.sha1()
+    for x, y in examples:
+        h.update(x.numpy().tobytes())
+        h.update(y.numpy().tobytes())
+    h.update(str(n_val).encode())
+    return h.hexdigest()
+
+
 def _cap_sample(raw: str, cap: int) -> str:
     """Sample `cap` chars from across the WHOLE file instead of taking its head.
 
@@ -104,12 +169,33 @@ def main():
     ap.add_argument("--accum", type=int, default=1,
                     help="micro-batches per optimizer step (true gradient accumulation)")
     ap.add_argument("--lora-r", type=int, default=16)
-    ap.add_argument("--lr", type=float, default=1e-4,
-                    help="QLoRA lr; 1e-4 measured best for repair-scale doses (2k-floor "
-                         "sweep 2026-11-09: 1e-4 < 2e-4 << 4e-4, which nearly unwound the repair)")
+    ap.add_argument("--lr", type=float, default=None,
+                    help="default 1e-4 for QLoRA (2k-floor sweep 2026-11-09: 1e-4 < 2e-4 << "
+                         "4e-4, which nearly unwound the repair); default 1e-5 with --full "
+                         "(unmeasured starting point — sweep it)")
+    ap.add_argument("--full", action="store_true",
+                    help="full-weight repair: no LoRA, fp32 master weights + bf16 autocast "
+                         "(needs an 80 GB-class card for a 4B slice)")
     ap.add_argument("--save-every", type=int, default=100,
-                    help="optimizer steps between adapter checkpoints (0 = periodic checkpoints off)")
-    ap.add_argument("--resume", default="", help="path to adapter checkpoint dir to resume from")
+                    help="optimizer steps between checkpoints (0 = periodic checkpoints off). "
+                         "--full keeps only the newest periodic checkpoint (~15 GB + optimizer each)")
+    ap.add_argument("--resume", default="",
+                    help="checkpoint dir (out/ckpt/stepN) to continue the same run from: "
+                         "restores weights/adapter, optimizer, scheduler, step and shuffle order")
+    ap.add_argument("--val-frac", type=float, default=0.0,
+                    help="hold out this fraction of examples (seeded) for held-out loss. "
+                         "Raw mode windows are contiguous ctx chunks, so neighbours of a val "
+                         "window are in train: an overfit detector, not a clean eval")
+    ap.add_argument("--val-max", type=int, default=256,
+                    help="examples scored per held-out eval (fixed subset; bounds eval cost)")
+    ap.add_argument("--eval-every", type=int, default=0,
+                    help="optimizer steps between held-out evals (0 = ~10 evals per run)")
+    ap.add_argument("--stop-on-val-rise", type=int, default=0,
+                    help="stop after K consecutive held-out evals worse than the best (0 = off)")
+    ap.add_argument("--push-repo", default="",
+                    help="private HF repo (user/name) to upload hf-recovered + results to")
+    ap.add_argument("--push-dry-run", action="store_true",
+                    help="list what --push-repo would upload, upload nothing")
     ap.add_argument("--max-chars", type=int, default=12_000_000)
     ap.add_argument("--calibrate", action="store_true",
                     help="measure throughput only: no checkpoints, no merge, no GGUF")
@@ -136,50 +222,77 @@ def main():
         _merge_to_hf(args.hf_dir, args.merge_only, args.out)
         return
 
+    if args.lr is None:
+        args.lr = 1e-5 if args.full else 1e-4
     if args.seed:
         import random as _rand
         torch.manual_seed(args.seed)
         _rand.seed(args.seed)
     lora_targets = (LORA_TARGETS if args.lora_targets == "all" else LORA_TARGETS_CLASSIC)
+    resume = Path(args.resume) if args.resume else None
+    if resume and not (resume / "train_state.pt").exists():
+        raise SystemExit(f"--resume {resume}: no train_state.pt — checkpoints written before "
+                         f"2026-11-12 hold weights only and cannot continue a run's schedule")
 
     from transformers import AutoModelForCausalLM, AutoTokenizer
-    from peft import LoraConfig, get_peft_model
     from bitsandbytes.optim import AdamW8bit
+
+    env = _env_report()
+    print(f"[recover-gpu] env: {json.dumps(env)}", flush=True)
+    if env["flash-linear-attention"] is None:
+        print("[recover-gpu] WARNING: flash-linear-attention not installed — the 24 "
+              "GatedDeltaNet layers run the slow torch fallback", flush=True)
 
     out = Path(args.out)
     (out / "ckpt").mkdir(parents=True, exist_ok=True)
 
     tok = AutoTokenizer.from_pretrained(args.hf_dir)
-    print("[recover-gpu] loading 4-bit base…", flush=True)
-    from transformers import BitsAndBytesConfig
-    bnb = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
-                             bnb_4bit_compute_dtype=torch.bfloat16,
-                             bnb_4bit_use_double_quant=True,
-                             llm_int8_skip_modules=FP32_SKIP_MODULES)
-    model = AutoModelForCausalLM.from_pretrained(
-        args.hf_dir,
-        quantization_config=bnb,
-        dtype=torch.bfloat16,
-        device_map={"": 0},
-    )
-    # in_proj_a/b load as bf16 via llm_int8_skip_modules (verified 2026-11-11: without
-    # it bnb 4-bit-quantizes the 32-row linears — and casting packed Params4bit bytes
-    # to bf16 post-load would corrupt them, so the exclusion happens at load time).
-    model.config.use_cache = False
-    model.enable_input_require_grads()
-    # Activations are the VRAM hog at ctx 512 x batch 8 (the 250k-vocab CE alone peaks
-    # several GiB in fp32). Grad checkpointing is nearly free at <1% trainable params.
-    model.gradient_checkpointing_enable()
+    if args.full:
+        src = resume / "model" if resume else args.hf_dir
+        print(f"[recover-gpu] loading fp32 base for full-weight repair from {src}…", flush=True)
+        model = AutoModelForCausalLM.from_pretrained(src, dtype=torch.float32,
+                                                     device_map={"": 0})
+        model.config.use_cache = False
+        model.gradient_checkpointing_enable()
+        n_train = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        print(f"[recover-gpu] full-weight: {n_train:,} trainable params", flush=True)
+    else:
+        from peft import LoraConfig, get_peft_model
+        print("[recover-gpu] loading 4-bit base…", flush=True)
+        from transformers import BitsAndBytesConfig
+        bnb = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
+                                 bnb_4bit_compute_dtype=torch.bfloat16,
+                                 bnb_4bit_use_double_quant=True,
+                                 llm_int8_skip_modules=FP32_SKIP_MODULES)
+        model = AutoModelForCausalLM.from_pretrained(
+            args.hf_dir,
+            quantization_config=bnb,
+            dtype=torch.bfloat16,
+            device_map={"": 0},
+        )
+        # in_proj_a/b load as bf16 via llm_int8_skip_modules (verified 2026-11-11: without
+        # it bnb 4-bit-quantizes the 32-row linears — and casting packed Params4bit bytes
+        # to bf16 post-load would corrupt them, so the exclusion happens at load time).
+        model.config.use_cache = False
+        model.enable_input_require_grads()
+        # Activations are the VRAM hog at ctx 512 x batch 8 (the 250k-vocab CE alone peaks
+        # several GiB in fp32). Grad checkpointing is nearly free at <1% trainable params.
+        model.gradient_checkpointing_enable()
 
-    lcfg = LoraConfig(r=args.lora_r, lora_alpha=2 * args.lora_r, lora_dropout=0.0,
-                      target_modules=lora_targets,
-                      bias="none", task_type="CAUSAL_LM")
-    model = get_peft_model(model, lcfg, adapter_name="repair")
-    if args.resume:
-        from peft import PeftModel
-        model.load_adapter(args.resume, adapter_name="repair")
-        print(f"[recover-gpu] resumed adapter from {args.resume}", flush=True)
-    model.print_trainable_parameters()
+        lcfg = LoraConfig(r=args.lora_r, lora_alpha=2 * args.lora_r, lora_dropout=0.0,
+                          target_modules=lora_targets,
+                          bias="none", task_type="CAUSAL_LM")
+        model = get_peft_model(model, lcfg, adapter_name="repair")
+        if resume:
+            from peft.utils import set_peft_model_state_dict
+            from safetensors.torch import load_file
+            sd = load_file(str(resume / "repair" / "adapter_model.safetensors"))
+            res = set_peft_model_state_dict(model, sd, adapter_name="repair")
+            bad = [k for k in getattr(res, "unexpected_keys", []) if "lora" in k]
+            if bad:
+                raise SystemExit(f"--resume: adapter keys did not load: {bad[:3]}…")
+            print(f"[recover-gpu] resumed adapter weights from {resume}", flush=True)
+        model.print_trainable_parameters()
     for name, m in model.named_modules():
         if hasattr(m, "in_proj_qkv"):
             probe = ", ".join(
@@ -299,6 +412,22 @@ def main():
         cap_mode = "striped" if len(raw) > args.max_chars else "full-file"
         print(f"[recover-gpu] {len(examples)} examples x <= {args.ctx} tok", flush=True)
 
+    # ---- held-out split (seeded, separate generator: the main RNG stream is untouched) ----
+    val_ex = []
+    if args.val_frac > 0:
+        g = torch.Generator().manual_seed(args.seed or 0)
+        perm = torch.randperm(len(examples), generator=g).tolist()
+        n_val = max(1, int(len(examples) * args.val_frac))
+        vset = set(perm[:n_val])
+        val_ex = [examples[i] for i in sorted(vset)][:args.val_max]
+        examples = [e for i, e in enumerate(examples) if i not in vset]
+        print(f"[recover-gpu] held out {n_val} examples ({args.val_frac:.1%}); "
+              f"scoring {len(val_ex)} per eval", flush=True)
+        n_val_total = n_val
+    else:
+        n_val_total = 0
+    data_sig = _data_signature(examples, n_val_total)
+
     # ---- schedule: micro-steps (batches) vs optimizer steps (accum bundles) ----
     n_ex = len(examples)
     if n_ex == 0:
@@ -310,9 +439,11 @@ def main():
     for _ in range(n_epochs_i):                 # per-epoch shuffle (review r2 f2)
         order += torch.randperm(n_ex).tolist()
     opt_total = max(1, -(-total_micro // args.accum))
+    eval_every = args.eval_every or max(1, opt_total // 10)
     print(f"[recover-gpu] {micro_per_epoch} micro-steps/epoch x {args.epochs} epochs = "
           f"{total_micro} micro-steps == {opt_total} optimizer steps "
-          f"(batch {args.batch}, accum {args.accum})", flush=True)
+          f"(batch {args.batch}, accum {args.accum}, lr {args.lr}, "
+          f"{'full-weight' if args.full else 'qlora r%d' % args.lora_r})", flush=True)
 
     pad_id = tok("<|im_end|>", add_special_tokens=False)["input_ids"]
     pad_id = pad_id[0] if pad_id else 0
@@ -321,30 +452,91 @@ def main():
                     lr=args.lr, weight_decay=0.0)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=opt_total)
 
-    def collate(sel):
-        L = max(len(examples[i][0]) for i in sel)
+    start_micro, tokens_seen, losses, val_curve, wall_before = 0, 0, [], [], 0.0
+    if resume:
+        st = torch.load(resume / "train_state.pt", weights_only=False)
+        if st["data_sig"] != data_sig:
+            raise SystemExit("--resume: training data differs from the checkpointed run "
+                             "(same corpus, --max-chars, --seed, --val-frac and ctx are required)")
+        if st["full"] != args.full:
+            raise SystemExit("--resume: --full must match the checkpointed run")
+        opt.load_state_dict(st["opt"])
+        sched.load_state_dict(st["sched"])
+        order, start_micro = st["order"], st["micro"]
+        tokens_seen, losses = st["tokens_seen"], st["losses"]
+        val_curve, wall_before = st["val_curve"], st["wall"]
+        torch.set_rng_state(st["rng"])
+        print(f"[recover-gpu] resumed run state at micro-step {start_micro}/{total_micro}",
+              flush=True)
+
+    amp = torch.autocast("cuda", dtype=torch.bfloat16, enabled=args.full)
+
+    def collate(pool, sel):
+        L = max(len(pool[i][0]) for i in sel)
         xs, ys = [], []
         for i in sel:
-            x, y = examples[i]
+            x, y = pool[i]
             p = L - len(x)
             xs.append(torch.cat([x, x.new_full((p,), pad_id)]) if p else x)
             ys.append(torch.cat([y, y.new_full((p,), -100)]) if p else y)
         return torch.stack(xs), torch.stack(ys)
 
+    @torch.no_grad()
+    def held_out_loss():
+        model.eval()
+        tot, n = 0.0, 0
+        for s in range(0, len(val_ex), args.batch):
+            sel = list(range(s, min(s + args.batch, len(val_ex))))
+            xb, yb = collate(val_ex, sel)
+            xb, yb = xb.to(model.device), yb.to(model.device)
+            with amp:
+                logits = model(input_ids=xb).logits
+            tgt = yb[:, 1:].reshape(-1)
+            tot += F.cross_entropy(logits[:, :-1].reshape(-1, logits.shape[-1]).float(), tgt,
+                                   ignore_index=-100, reduction="sum").item()
+            n += (tgt != -100).sum().item()
+        model.train()
+        return tot / max(1, n)
+
+    def save_ckpt(tag, micro_done):
+        d = out / "ckpt" / tag
+        if args.full:
+            model.save_pretrained(d / "model", safe_serialization=True)
+        else:
+            model.save_pretrained(d)
+        torch.save({"micro": micro_done, "opt": opt.state_dict(), "sched": sched.state_dict(),
+                    "order": order, "tokens_seen": tokens_seen, "losses": losses,
+                    "val_curve": val_curve, "wall": wall_before + time.time() - t0,
+                    "rng": torch.get_rng_state(), "data_sig": data_sig, "full": args.full},
+                   d / "train_state.pt")
+        if args.full and tag.startswith("step"):    # keep only the newest full checkpoint
+            import shutil
+            for old in (out / "ckpt").glob("step*"):
+                if old != d:
+                    shutil.rmtree(old, ignore_errors=True)
+        print(f"[recover-gpu] checkpoint saved: {tag}", flush=True)
+
     t0 = time.time()
-    tokens_seen = 0
     log_every = max(1, total_micro // 20)
-    losses = []
+    best_val, rises, stopped_early = float("inf"), 0, False
+    if val_ex and not resume:
+        v = held_out_loss()
+        val_curve.append({"opt_step": 0, "val_loss": v})
+        best_val = v
+        print(f"[recover-gpu] held-out loss @0: {v:.4f}", flush=True)
+    elif val_curve:
+        best_val = min(e["val_loss"] for e in val_curve)
     model.train()
-    for micro in range(total_micro):
+    for micro in range(start_micro, total_micro):
         sel = order[micro * args.batch: (micro + 1) * args.batch]
         if len(sel) < args.batch:               # tail micro-batch: drop, don't short-batch
             break
-        xb, yb = collate(sel)
+        xb, yb = collate(examples, sel)
         xb, yb = xb.to(model.device), yb.to(model.device)
-        logits = model(input_ids=xb).logits
-        loss = F.cross_entropy(logits[:, :-1].reshape(-1, logits.shape[-1]),
-                               yb[:, 1:].reshape(-1), ignore_index=-100)
+        with amp:
+            logits = model(input_ids=xb).logits
+            loss = F.cross_entropy(logits[:, :-1].reshape(-1, logits.shape[-1]),
+                                   yb[:, 1:].reshape(-1), ignore_index=-100)
         (loss / args.accum).backward()
         losses.append(loss.item())
         tokens_seen += xb.numel()
@@ -353,54 +545,83 @@ def main():
             opt.step()
             sched.step()
             opt.zero_grad(set_to_none=True)
-            if args.save_every and os_done % args.save_every == 0:
-                model.save_pretrained(out / "ckpt" / f"step{os_done}")
-                print(f"[recover-gpu] checkpoint saved: optimizer step {os_done}",
-                      flush=True)
-        if (micro + 1) % log_every == 0 or micro == 0:
+            if val_ex and os_done % eval_every == 0:
+                v = held_out_loss()
+                val_curve.append({"opt_step": os_done, "val_loss": v})
+                if v < best_val:
+                    best_val, rises = v, 0
+                else:
+                    rises += 1
+                print(f"[recover-gpu] held-out loss @{os_done}: {v:.4f} "
+                      f"(best {best_val:.4f}, rises {rises})", flush=True)
+                if args.stop_on_val_rise and rises >= args.stop_on_val_rise:
+                    print(f"[recover-gpu] STOP: held-out loss rose {rises} evals in a row",
+                          flush=True)
+                    stopped_early = True
+            if args.save_every and os_done % args.save_every == 0 and not args.calibrate:
+                save_ckpt(f"step{os_done}", micro + 1)
+        if (micro + 1) % log_every == 0 or micro == start_micro:
             dt = time.time() - t0
             print(f"[recover-gpu] micro {micro+1}/{total_micro} loss {loss.item():.4f} "
                   f"(avg {sum(losses[-log_every:])/len(losses[-log_every:]):.4f}) "
-                  f"{tokens_seen/dt:.0f} tok/s {dt:.0f}s "
-                  f"vrsm {torch.cuda.memory_allocated()/2**30:.1f}GiB", flush=True)
+                  f"{tokens_seen/(wall_before + dt):.0f} tok/s {dt:.0f}s "
+                  f"vrsm {torch.cuda.memory_allocated()/2**30:.1f}GiB "
+                  f"peak {torch.cuda.max_memory_allocated()/2**30:.1f}GiB", flush=True)
+        if stopped_early:
+            break
 
     if args.calibrate:
         rate = tokens_seen / (time.time() - t0)
         print(f"CALIBRATION: {rate:.0f} tok/s (batch {args.batch}, ctx {args.ctx}, "
-              f"QLoRA r{args.lora_r}, accum {args.accum})", flush=True)
+              f"{'full-weight' if args.full else 'QLoRA r%d' % args.lora_r}, accum {args.accum}, "
+              f"peak {torch.cuda.max_memory_allocated()/2**30:.1f}GiB)", flush=True)
         return
 
-    # final save + merge always run (periodic checkpoints were optional)
-    model.save_pretrained(out / "ckpt" / "final")
-    # in-place merge on the 4-bit bnb model is both lossy and un-castable; the
-    # exact path reloads a bf16 CPU base with the saved adapter.
-    adapter_dir = out / "ckpt" / "final" / "repair"
-    model = None  # free GPU + grads before the RAM-heavy merge
-    import gc; gc.collect()
-    _merge_to_hf(args.hf_dir, str(adapter_dir), str(out))
     hf_out = out / "hf-recovered"
-    wall = time.time() - t0
+    if args.full:
+        opt = None
+        import gc; gc.collect(); torch.cuda.empty_cache()
+        model.to(torch.bfloat16)                   # ship bf16, like the LoRA merge path
+        model.save_pretrained(hf_out, safe_serialization=True)
+        tok.save_pretrained(hf_out)
+        print(f"[recover-gpu] saved full-weight model -> {hf_out}", flush=True)
+    else:
+        # final save + merge always run (periodic checkpoints were optional)
+        model.save_pretrained(out / "ckpt" / "final")
+        # in-place merge on the 4-bit bnb model is both lossy and un-castable; the
+        # exact path reloads a bf16 CPU base with the saved adapter.
+        adapter_dir = out / "ckpt" / "final" / "repair"
+        model = None  # free GPU + grads before the RAM-heavy merge
+        import gc; gc.collect()
+        _merge_to_hf(args.hf_dir, str(adapter_dir), str(out))
+    wall = wall_before + time.time() - t0
 
     report = {
         "hf_dir": str(args.hf_dir), "corpus": str(args.corpus),
+        "mode": "full-weight" if args.full else "qlora",
         "params": {"epochs": args.epochs, "ctx": args.ctx, "batch": args.batch,
-                   "accum": args.accum, "lora_r": args.lora_r, "lr": args.lr},
-        "lora_targets": lora_targets,
-        "lora_target_mode": args.lora_targets,
+                   "accum": args.accum, "lora_r": None if args.full else args.lora_r,
+                   "lr": args.lr, "max_chars": args.max_chars},
+        "lora_targets": None if args.full else lora_targets,
+        "lora_target_mode": None if args.full else args.lora_targets,
         "seed": args.seed,
         "cap_sampling": cap_mode,
         "chunk_shuffle": True,
         "format": ("sft-chat-v3" if args.sft_dataset else
                    "sft-chat-v2" if args.sft else "raw-completion"),
         "loss_first": losses[0], "loss_last20_avg": sum(losses[-20:]) / min(20, len(losses)),
+        "val_frac": args.val_frac, "val_curve": val_curve,
+        "stopped_early": stopped_early, "resumed_from": str(resume) if resume else None,
         "tokens_seen": tokens_seen, "train_tok_per_s": tokens_seen / wall,
-        "wall_seconds": wall, "hf_recovered": str(hf_out),
+        "wall_seconds": wall, "hf_recovered": str(hf_out), "env": env,
     }
     if skipped:
         report["skipped_by_kind"] = {k: v[0] for k, v in skipped.items()}
     (out / "recover-results.json").write_text(json.dumps(report, indent=2))
     print(json.dumps(report, indent=2), flush=True)
     print(f"[recover-gpu] done -> {out}", flush=True)
+    if args.push_repo:
+        _push(out, args.push_repo, args.full, dry_run=args.push_dry_run)
 
 
 if __name__ == "__main__":
