@@ -828,6 +828,37 @@ Gotchas recorded while the BF16-source chain finishes:
    40s and left an invalid-magic file. The Q8-derived Q3_K_M/IQ3_XS rows are dropped;
    the BF16 chain provides the honest versions (and Q3_K_M needs no imatrix at all).
 
+### 0j.5 — LM Studio probe: the do-nothing 27B aces the flagship triage sample (2026-11-11)
+
+Stock, unsliced, un-trained Qwen3.8-27B — our IQ3_M imatrix quant (the one valid 27B quant
+of the Q8 chain, 11.9 GiB, §0j.4) — run in LM Studio on the 5080 at 16k ctx, incident-46
+bundle (the held-out incident of the SFT arc). The model stayed in context (barely:
+~6,600 thinking tokens + ~700 output) and produced:
+
+- **Causally correct OOMKilled diagnosis**: container memory limit 4Gi vs >200k-entry
+  encrypted-directory enumeration, per-bucket timeline (three clean buckets, death
+  during part-images), correct "retry will OOM again" determination.
+- **Correct remediation insight we never taught any model**: the 4Gi limit must be raised
+  in the git manifest because manual kubectl edits are reverted by Argo CD self-heal.
+- Cited evidence-field details faithfully (timestamps, pod/attempt names, drive names) —
+  GROUNDED in the bundle, not confabulated (compare: v3's fabricated log line before
+  system-prompt restoration).
+- Schema drift vs the operator's native JSON: "findings" as long prose paragraphs,
+  "confidence" as a string — closer to raw model style than pipeline vocab.
+
+**Strategic consequence (pairs with the §0j.4 PPL rows):** for the 27B/5080 goal,
+quantization alone may already be the answer — the do-nothing arm renders in the target
+size band AND handles the flagship task out of the box. The small-sliced-model path's
+remaining advantages are economic, not capability: ~10x cheaper per triage (sftv3
+answers in ~650 tokens vs ~7,300 here), native operator schema + eos discipline
+(v3 is *trained* for the harness), and many parallel small models per 16 GiB vs one
+27B. Tentative split for the fleet: 27B-at-3-bit for deep single investigations,
+trained 4B-class for the parallel/quick triage bots. This probe is a session sample,
+one prompt — the M2 incident-triage task suite (TODO) is what makes it a verdict.
+
+Also recorded: at 16k ctx + 11.9 GiB weights the 5080 sits at 15.7/16.3 GiB VRAM —
+essentially the practical ceiling for this quant on this card.
+
 ## 5. Milestones
 
 Tracked in [`TODO.md`](../TODO.md); summary:
