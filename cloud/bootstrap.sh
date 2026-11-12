@@ -18,10 +18,6 @@ if command -v apt-get > /dev/null; then
     libcurl4-openssl-dev rsync > /dev/null
 fi
 nvidia-smi > /dev/null || { echo "FATAL: no GPU visible"; exit 1; }
-command -v nvcc > /dev/null || [ -x /usr/local/cuda/bin/nvcc ] || {
-  echo "FATAL: no nvcc (CUDA toolkit) — llama.cpp's CUDA build needs it; pick an image with the toolkit"; exit 1; }
-export PATH="/usr/local/cuda/bin:$PATH"
-
 # torch wheel: the desktop runs 2.15.0+cu132. Use it when the driver allows; older
 # drivers get the nearest wheel and a loud parity warning (Run 0 then measures it).
 DRV_CUDA=$(nvidia-smi | sed -n 's/.*CUDA Version: \([0-9]*\.[0-9]*\).*/\1/p' | head -1)
@@ -31,6 +27,23 @@ elif ver_ge "$DRV_CUDA" 13.0; then TORCH="torch==2.14.1"; IDX=cu130
 else TORCH="torch==2.14.1"; IDX=cu126; fi
 echo "driver CUDA $DRV_CUDA -> $TORCH ($IDX)"
 [ "$IDX" = cu132 ] || echo "WARNING: not the desktop's torch 2.15.0+cu132 — Run 0 parity is now also testing this torch"
+
+# nvcc for the llama.cpp CUDA build (and causal-conv1d). Many GPU VM images ship only
+# the driver: install the toolkit matching the torch wheel from NVIDIA's apt repo.
+export PATH="/usr/local/cuda/bin:$PATH"
+if ! command -v nvcc > /dev/null; then
+  TK="cuda-toolkit-${IDX:2:2}-${IDX:4}"            # cu132 -> cuda-toolkit-13-2
+  . /etc/os-release
+  KEYRING_URL="https://developer.download.nvidia.com/compute/cuda/repos/ubuntu${VERSION_ID//./}/x86_64/cuda-keyring_1.1-1_all.deb"
+  echo "no nvcc: installing $TK from $KEYRING_URL"
+  curl -fsSLo /tmp/cuda-keyring.deb "$KEYRING_URL"
+  sudo dpkg -i /tmp/cuda-keyring.deb > /dev/null
+  sudo apt-get update -qq
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$TK" > /dev/null
+  [ -d /usr/local/cuda ] || sudo ln -s "/usr/local/cuda-${IDX:2:2}.${IDX:4}" /usr/local/cuda
+fi
+command -v nvcc > /dev/null || { echo "FATAL: still no nvcc after the toolkit install"; exit 1; }
+nvcc --version | tail -1
 
 echo "=== [2/6] python env -> ~/forge-env ==="
 [ -d ~/forge-env ] || python3 -m venv ~/forge-env

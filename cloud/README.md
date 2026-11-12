@@ -13,10 +13,12 @@ set.
 
 ## 0. Instance
 
-1× A100 **80GB** or H100 80GB. Full-weight Run 1 needs ~40 GB before activations, so a
+1× A100 **80GB** or H100 80GB, VM mode (full machine, ssh + sudo; Jupyter is irrelevant). Full-weight Run 1 needs ~40 GB before activations, so a
 40GB A100 only fits the QLoRA runs. On an A100, run bootstrap as
 `CUDA_ARCH=80 bash ~/forge/cloud/bootstrap.sh`; the default 90 builds llama.cpp for H100
-only. The image needs the CUDA toolkit (`nvcc`): bootstrap stops if it's missing.
+only. If the image has only the driver, bootstrap installs the matching CUDA toolkit
+from NVIDIA's apt repo. Disk: 256 GB covers the 4B work (≈100 GB worst case); 27B work
+needs more.
 A driver reporting CUDA ≥ 13.2 gets the desktop's exact torch (2.15.0+cu132). Older
 drivers get the nearest wheel and a warning, and Run 0 then also tests that torch.
 
