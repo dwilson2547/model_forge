@@ -1,0 +1,11 @@
+# forge hot-loop deps (cuda torch is installed separately by bootstrap.sh)
+transformers
+accelerate
+peft
+bitsandbytes
+datasets
+sentencepiece
+tokenizers
+huggingface_hub[hf_transfer]
+gguf
+numpy

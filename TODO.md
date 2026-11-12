@@ -4,6 +4,25 @@ Design: [`docs/design.md`](docs/design.md). Status: v3 shipped (qwen35-4b-drop2-
 2026-11-11); review round 2 fixes applied + two decisive experiments fired (see design §0j):
 plateau rerun on the 5080, 27B 3-bit do-nothing baseline on the Altra. Next: v4 SFT diet (below).
 
+## Cloud lane (Brev H100 — doctrine adopted 2026-11-12, design §0j.8)
+
+- [x] Doctrine decided: hybrid local + rented. Cloud = hot loop (27B production,
+      full-weight repair, MoE training, ~$5/run cap, spot-safe checkpoint-to-HF);
+      desktop = LM Studio probes + 4B/9B dev; Ampere = archive/staging/serial evals
+      only (no 24h CPU slogs on the critical path). Port 6000-buy rejected on
+      break-even math (~4,000+ rental hours needed).
+- [x] `cloud/` kit in repo: bootstrap.sh (venv + CUDA llama.cpp + pinned deps) + runbook.
+- [ ] User: spin up first Brev H100 instance (account/SSH is user-side).
+- [ ] Run 0 — port parity (~$0.50): re-run the [25,29] repair arm, seed 1234, expect
+      loss 2.625→2.230 and floors ≈ 8.031/11.894/3.485 (§0j.7). Within noise ⇒ port verified.
+- [ ] Run 1 — plateau escalation (~$1-2): FULL-WEIGHT repair of the [25,29] slice,
+      same 2-epoch protocol (+1-epoch companion vs dose-overfit risk). Verdict rule:
+      fineweb substantially <11.894 ⇒ the wall was a rank-16 ceiling and cloud becomes
+      the default repair lane; ≈11.9 ⇒ wall is genre damage, route repairs via SFT.
+- [ ] After parity: move 27B quants/imatrix/floor production to cloud; keep the
+      src-bf16/ dir on the box until the IQ3_XS retry question is settled (user call).
+
+
 ## M0 — Altra bring-up baseline (fills the ⬜s in the design)
 
 - [x] OS + storage layout decided; 128-core topology confirmed (Ubuntu 24.04.5, 128× Neoverse-N1 @ 3.0 GHz,

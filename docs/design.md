@@ -939,6 +939,31 @@ scorer for picks; (b) the [25,29] arm joins the M5 franken-MoE expert shelf; (c)
 unrepaired-[25,29] floor row would separate "smaller wound" from "better repair" —
 queued as a cheap box follow-up, not blocking anything.
 
+### 0j.8 — Infrastructure doctrine: hybrid local + rented (decided 2026-11-12)
+
+Direct measurement forced this: the 24.4h BF16 imatrix cost ~$1.00–1.50 in Altra
+electricity for a job an H100 does in ~30–45 min for ~$1 of rental — the CPU box is
+at parity on cost and strictly worse on wall-clock, queue depth, and babysitting
+(two driver crashes this chain alone). An owned RTX 6000 Pro (~$7–9k) needs
+~4,000+ rental-hours of *sustained* workload to break even against $1.70/hr H100s;
+we don't have that workload and may never.
+
+Split adopted:
+- **Cloud (Brev H100 80GB, spot-tolerant)**: the hot loop. 27B imatrix/quants/floor
+  production, full-weight repair (previously "out of reach locally" — a 4B slice
+  + AdamW fits one 80GB card), 27B QLoRA, future MoE training. Cost cap ~$5/run;
+  every run checkpoints + pushes artifacts to HF before exit.
+- **Desktop 5080**: interactive LM Studio probes, 4B/9B dev iteration (free, fast
+  enough, keeps the desktop usable-by-owner constraint satisfied for cloud runs).
+- **Ampere**: demoted to utility. Model archive + SMB share, staging, serial eval
+  sweeps where wall-clock has no value, GGUF conversion + CPU floors when a
+  verdict isn't blocking. No more 24h CPU slogs on the critical path.
+
+`cloud/` in the repo: bootstrap.sh (venv + CUDA llama.cpp + deps) and the runbook
+(port parity run 0, full-weight plateau test run 1) in `cloud/README.md`. The old
+"hire the wall-breaking full-weight repair" escalation in §0f is now affordable
+and is the first real cloud experiment.
+
 ## 5. Milestones
 
 Tracked in [`TODO.md`](../TODO.md); summary:
