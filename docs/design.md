@@ -1177,6 +1177,28 @@ clearly more redundant per dropped layer than the 4B, though. 4B drop2 (6% of la
 unrepaired was +34% fineweb (13.95 vs 10.44); 27B drop4 (6%) is +16%. The repair question
 stays open until the larger drops land.
 
+**The other two routes landed (2026-11-13, Altra CPU floor, `results/multicorpus.jsonl`).**
+
+| 27B variant | size | wikitext | fineweb | code | frees vs IQ3_M |
+|---|---:|---:|---:|---:|---:|
+| IQ3_M unsliced, f16 KV, flash attn (control) | 11.89 GiB | 6.129 | 8.697 | 2.565 | – |
+| IQ3_M unsliced, **q8_0 KV** | 11.89 GiB | 6.135 | 8.687 | 2.562 | half the KV: 1 GiB at 32k ctx |
+| **IQ3_XS** (mtp3s) | 11.32 GiB | 6.190 (+1.0%) | 8.788 (+1.0%) | 2.582 (+0.7%) | 0.57 GiB ≈ 9.4k tok f16 |
+| drop6 unrepaired IQ3_M | 10.92 GiB | 7.062 (+15%) | 10.456 (+20%) | 2.714 (+6%) | 0.97 GiB ≈ 15.9k tok f16 |
+
+- **q8_0 KV is free at this window:** every corpus within ±0.1% of its f16-KV control. It halves
+  KV to 32 KiB/token, so at 32k ctx it frees 1 GiB, more than drop6, with no surgery. The floor
+  is 512-token chunks; KV-quant error at long windows is ⚠ unverified (longwindow run next).
+- **IQ3_XS frees 0.57 GiB, not the ~1 GiB estimated above,** for about +1% everywhere.
+- **drop6 does not pay for a repair.** To match IQ3_XS per GiB it would need fineweb back to
+  about 8.8, i.e. 94% of its gap closed. The best 4B repair, distillation (§0j.12), closed 61% of
+  the [25,29] fineweb gap (13.95 → 11.80, base 10.44); 61% on drop6 gives about 9.38 (+8%)
+  (⚠ extrapolated across model sizes, not measured).
+
+**Verdict:** the context lever on the 27B is IQ3_M (or IQ3_XS when the extra 0.57 GiB matters) with
+q8_0 KV. The drop6 cloud repair is shelved, not run. It reopens only if a measurement shows the 27B
+recovering far better than the 4B did.
+
 ### 0j.11 — KLD floor: perplexity was scoring train/test overlap, not repair (2026-11-13)
 
 **Why.** PPL rewards predicting a corpus; it ranked wikirep above the base on wikitext while
