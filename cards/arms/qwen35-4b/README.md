@@ -30,5 +30,7 @@ drop2 [25,29] 12.823 / 13.954 / 3.610. The best floors are 2529-fresh1e (QLoRA) 
 | full-repair-2529 | [lr3e-6](lr3e-6.md) | Full-weight repair (no LoRA) of the [25,29] slice at lr 3e-6, on a rented A100 | 7.631 / 11.362 / 3.259 | archive |
 | full-repair-2529 | [lr1e-6](lr1e-6.md) | Full-weight repair (no LoRA) of the [25,29] slice at lr 1e-6, on a rented A100 | 7.685 / 11.39 / 3.182 | archive |
 
+LM Studio GGUFs of several arms: [lmstudio-builds](lmstudio-builds.md).
+
 Not arms: `drop2-repair/calib`, `calib-r2fixes` are `--calibrate` smoke tests of the trainer;
 `cloud-session1/run0-parity` is the cloud trainer-parity adapter (§0j.9 run 0b).
