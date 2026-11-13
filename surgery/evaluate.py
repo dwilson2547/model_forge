@@ -9,6 +9,7 @@ printed on stdout as "[ Prompt: X t/s | Generation: Y t/s ]"; stdin must be
 
 import os
 import re
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -49,6 +50,9 @@ def ppl(model_gguf, data_file, llamacpp_dir, chunks=24, threads=None):
            "-f", str(data_file), "--chunks", str(chunks), "-t", str(threads or THREADS)]
     if NGL:
         cmd += ["-ngl", NGL]
+    # Extra llama-perplexity flags for a floor arm, e.g. the KV-cache quant arm
+    # (design §0j.10): FORGE_PPL_EXTRA="-fa on -ctk q8_0 -ctv q8_0".
+    cmd += shlex.split(os.environ.get("FORGE_PPL_EXTRA", ""))
     proc = subprocess.run(
         cmd,
         stdin=subprocess.DEVNULL, capture_output=True, text=True,

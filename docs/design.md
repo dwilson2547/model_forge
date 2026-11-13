@@ -1152,8 +1152,25 @@ Unrepaired rows, IQ3_M with the base imatrix remapped (the driver fills this in 
 |---|---:|---:|---:|---:|
 | IQ3_M unsliced (§0j.4 bar) | 11.89 GiB | 6.129 | 8.697 | 2.565 |
 | drop4 unrepaired IQ3_M | 11.24 GiB | 6.875 (+12%) | 10.071 (+16%) | 2.676 (+4%) |
+| drop6 unrepaired IQ3_M | 10.92 GiB | 7.062 (+15%) | 10.456 (+20%) | 2.714 (+6%) |
+| drop8 unrepaired IQ3_M | 10.60 GiB | 10.667 (+74%) | 12.647 (+45%) | 2.980 (+16%) |
+| drop13 unrepaired IQ3_M | 9.79 GiB | 13.187 (+115%) | 15.685 (+80%) | 3.365 (+31%) |
 
-First read (drop4): it frees 0.65 GiB, which is about 10k tokens of f16 KV by the §0j.10
+Freed versus IQ3_M (arithmetic at 64 KiB/token of f16 KV): drop4 0.65 GiB ≈ 10.6k tokens,
+drop6 0.97 ≈ 15.9k, drop8 1.29 ≈ 21.1k, drop13 2.10 ≈ 34.4k.
+
+**There is a cliff between drop6 and drop8.** Adding blocks 6 and 18 takes wikitext from +15% to +74%.
+Up to drop6 the damage grows slowly (each extra block costs about 1–2 points). drop6 is the
+knee and the only slice worth a repair spend: about 16k tokens of headroom at +20% fineweb
+unrepaired. Wikitext, the scorer's own calibration domain, is hit hardest, so the
+scorer's cos-similarity ranking does not track wikitext loss well past the first few blocks.
+
+Disk on the Altra (2026-11-13): the HF-format 27B (`~/m0/registry/Qwen3.8-27B`, 52 GB, used only
+by the scorer, re-downloadable) was deleted, along with the drop4/8/13 IQ3_M slices (each takes
+about 5 min to rebuild from the BF16 source with `surgery.gguf_drop` + remapped imatrix). drop6-IQ3_M stays as the repair
+candidate. The BF16 source shards stay, since every slice is cut from them.
+
+First read, written when only drop4 had landed: it frees 0.65 GiB, which is about 10k tokens of f16 KV by the §0j.10
 arithmetic, for +16% fineweb. **Unrepaired, it does not beat the KV-quant route**, which should free
 about 0.5 GiB at 16k ctx with no surgery (⚠ unverified on this model). The 27B is
 clearly more redundant per dropped layer than the 4B, though. 4B drop2 (6% of layers)
