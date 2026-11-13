@@ -1055,6 +1055,32 @@ torch 2.14.1+cu130 rather than the desktop's 2.15.0+cu132):
   Floor (CUDA): f16 8.032 / 11.900 / 3.490 vs the desktop+Altra's 8.031 / 11.894 / 3.485,
   and Q4_K_M 8.183 / 12.176 / 3.535 vs 8.207 / 12.166 / 3.537. **Parity passes**: every
   f16 corpus is within 0.006, so cloud rows are directly comparable.
+- **Run 1 (full-weight repair):** the [25,29] slice with `--full` (fp32 master weights,
+  bf16 autocast, AdamW8bit), the same data, split and seed as fresh1e, 1 epoch, 4,654
+  steps each. About 3,000 tok/s with a 40.6 GiB peak, 52 min per arm. None stopped early.
+
+  | [25,29] repaired, f16 | held-out | wikitext | fineweb | code |
+  |---|---:|---:|---:|---:|
+  | fresh1e (QLoRA r16 @ 1e-4) | 2.087 | 7.785 | 11.556 | 3.186 |
+  | full, lr 1e-5 | 2.045 | 8.085 | 12.082 | 3.542 |
+  | full, lr 3e-6 | 2.031 | 7.631 | 11.362 | 3.259 |
+  | full, lr 1e-6 | 2.072 | 7.685 | 11.390 | 3.182 |
+
+  Q4_K_M (CUDA, which reads about 0.04 low vs the Altra): lr 1e-5 8.190 / 12.204 / 3.592,
+  lr 3e-6 7.766 / 11.634 / 3.322, lr 1e-6 7.832 / 11.688 / 3.234. fresh1e (Altra)
+  7.923 / 11.816 / 3.227.
+
+  **Full weights tie LoRA: adapter capacity was not the wall.** At 3e-6 and 1e-6, prose
+  is 0.10–0.19 better, inside the ±0.27 fineweb noise band on one seed, and code is
+  even (1e-6) or worse (3e-6). At 1e-5, every corpus is worse even though held-out loss
+  is lower than fresh1e's. **Held-out loss does not rank arms**: it is drawn from the
+  training mix, so it rewards fitting the mix, and the floor can move the other way.
+  Judge arms on the floor only. The lever that moved the floor this session was fresh
+  tokens (fresh1e), not capacity. If full weights are needed later, start at lr 1e-6–3e-6.
+  Models are in `~/forge-gpu/cloud-session1/` on the desktop.
+- Session cost: about $4–6 on-demand for parity plus three full-weight arms (the Brev
+  readout, measured by the user, was $2.68 partway through). On the 5080, the arms alone
+  would be about 4.5 h, and full-weight's 40 GiB peak does not fit its 16 GB.
 
 ## 5. Milestones
 
