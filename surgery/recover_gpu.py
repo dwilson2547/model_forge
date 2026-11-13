@@ -34,6 +34,13 @@ Cloud-lane additions (design §0j.8, review 2026-11-12):
 - Checkpoints carry train_state.pt (optimizer, scheduler, step, shuffle order, data
   signature) and --resume continues the SAME run — it used to restart the schedule at
   step 0 on top of the loaded adapter, i.e. silently train extra epochs.
+- --distill <teacher hf dir>: knowledge distillation instead of next-token CE (design
+  §0j.12). The loss is KL(teacher || student) per position at T=1, i.e. the student learns
+  the base's whole next-token distribution on the corpus, not the corpus text itself, so
+  the repair can't buy wikitext/code PPL by specializing (§0j.11). The teacher runs bf16,
+  frozen, in the same process; the KL is computed in checkpointed position chunks so the
+  two 248k-vocab fp32 softmaxes never coexist for a whole batch. Held-out loss is the same
+  KL.
 - --push-repo uploads the run's artifacts to a private HF repo after the results json is
   written (token from HF_TOKEN / the cached login, never from a file in the repo).
 """
@@ -203,6 +210,11 @@ def main():
     ap.add_argument("--lora-targets", choices=["all", "classic"], default="all",
                     help="'all' = q/k/v/o + MLP + linear_attn mixers (r2fix, current default); "
                          "'classic' = the pre-2026-11-11 q/k/v/o + MLP list (isolation arms)")
+    ap.add_argument("--distill", default="",
+                    help="teacher HF dir (the unsliced base): train on KL(teacher||student) "
+                         "instead of next-token CE (design §0j.12)")
+    ap.add_argument("--kd-chunk", type=int, default=128,
+                    help="positions per checkpointed KL chunk (VRAM vs speed)")
     ap.add_argument("--seed", type=int, default=0,
                     help="0 = unseeded; otherwise seeds torch+random so striped-cap sampling "
                          "and epoch shuffles are repeatable (all future arms should pass it)")
@@ -301,6 +313,39 @@ def main():
                 if hasattr(m, p))
             print(f"[recover-gpu] linear-attn probe {name}: {probe}", flush=True)
             break
+
+    teacher = None
+    if args.distill:
+        if args.sft or args.sft_dataset:
+            raise SystemExit("--distill is raw-completion only")
+        print(f"[recover-gpu] loading bf16 teacher {args.distill}…", flush=True)
+        teacher = AutoModelForCausalLM.from_pretrained(args.distill, dtype=torch.bfloat16,
+                                                       device_map={"": 0})
+        teacher.config.use_cache = False
+        teacher.eval().requires_grad_(False)
+        if teacher.config.get_text_config().vocab_size != model.config.get_text_config().vocab_size:
+            raise SystemExit("--distill: teacher and student vocabularies differ")
+        print(f"[recover-gpu] teacher loaded; vram {torch.cuda.memory_allocated()/2**30:.1f}GiB",
+              flush=True)
+
+    def _kd_part(s_lg, t_lg, m):
+        ls = F.log_softmax(s_lg.float(), dim=-1)
+        lt = F.log_softmax(t_lg.float(), dim=-1)
+        return ((lt.exp() * (lt - ls)).sum(-1) * m).sum()
+
+    def kd_loss(s_logits, xb, yb):
+        """mean per-token KL(teacher || student) over the positions CE would score"""
+        from torch.utils.checkpoint import checkpoint
+        with torch.no_grad():
+            t_logits = teacher(input_ids=xb).logits[:, :-1]
+        s_logits = s_logits[:, :-1]
+        m = (yb[:, 1:] != -100).to(torch.float32)
+        tot = s_logits.new_zeros((), dtype=torch.float32)
+        for i in range(0, s_logits.shape[1], args.kd_chunk):
+            j = i + args.kd_chunk
+            tot = tot + checkpoint(_kd_part, s_logits[:, i:j], t_logits[:, i:j], m[:, i:j],
+                                   use_reentrant=False)
+        return tot / m.sum().clamp(min=1)
 
     skipped = {}
     cap_mode = "n/a (sft-dataset)"
@@ -492,9 +537,13 @@ def main():
             with amp:
                 logits = model(input_ids=xb).logits
             tgt = yb[:, 1:].reshape(-1)
-            tot += F.cross_entropy(logits[:, :-1].reshape(-1, logits.shape[-1]).float(), tgt,
-                                   ignore_index=-100, reduction="sum").item()
-            n += (tgt != -100).sum().item()
+            k = (tgt != -100).sum().item()
+            if teacher is not None:
+                tot += kd_loss(logits, xb, yb).item() * k
+            else:
+                tot += F.cross_entropy(logits[:, :-1].reshape(-1, logits.shape[-1]).float(), tgt,
+                                       ignore_index=-100, reduction="sum").item()
+            n += k
         model.train()
         return tot / max(1, n)
 
@@ -535,8 +584,11 @@ def main():
         xb, yb = xb.to(model.device), yb.to(model.device)
         with amp:
             logits = model(input_ids=xb).logits
-            loss = F.cross_entropy(logits[:, :-1].reshape(-1, logits.shape[-1]),
-                                   yb[:, 1:].reshape(-1), ignore_index=-100)
+            if teacher is not None:
+                loss = kd_loss(logits, xb, yb)
+            else:
+                loss = F.cross_entropy(logits[:, :-1].reshape(-1, logits.shape[-1]),
+                                       yb[:, 1:].reshape(-1), ignore_index=-100)
         (loss / args.accum).backward()
         losses.append(loss.item())
         tokens_seen += xb.numel()
@@ -579,7 +631,7 @@ def main():
 
     hf_out = out / "hf-recovered"
     if args.full:
-        opt = None
+        opt = teacher = None
         import gc; gc.collect(); torch.cuda.empty_cache()
         model.to(torch.bfloat16)                   # ship bf16, like the LoRA merge path
         model.save_pretrained(hf_out, safe_serialization=True)
@@ -591,7 +643,7 @@ def main():
         # in-place merge on the 4-bit bnb model is both lossy and un-castable; the
         # exact path reloads a bf16 CPU base with the saved adapter.
         adapter_dir = out / "ckpt" / "final" / "repair"
-        model = None  # free GPU + grads before the RAM-heavy merge
+        model = teacher = None  # free GPU + grads before the RAM-heavy merge
         import gc; gc.collect()
         _merge_to_hf(args.hf_dir, str(adapter_dir), str(out))
     wall = wall_before + time.time() - t0
@@ -607,6 +659,7 @@ def main():
         "seed": args.seed,
         "cap_sampling": cap_mode,
         "chunk_shuffle": True,
+        "objective": f"kd-kl(teacher={args.distill})" if args.distill else "ce",
         "format": ("sft-chat-v3" if args.sft_dataset else
                    "sft-chat-v2" if args.sft else "raw-completion"),
         "loss_first": losses[0], "loss_last20_avg": sum(losses[-20:]) / min(20, len(losses)),
