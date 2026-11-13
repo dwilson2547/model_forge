@@ -19,9 +19,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from bench.serve import LlamaServer           # noqa: E402
 from bench.tasks import ALL_TASKS, loop_threshold, run_task  # noqa: E402
+from surgery import paths  # noqa: E402
 
-RESULTS = Path.home() / "m0" / "runs" / "bench-results.jsonl"
-TTFT_PROMPT_FILE = Path.home() / "m0" / "data" / "fineweb.test.txt"
+RESULTS = paths.RESULTS / "bench.jsonl"
+TTFT_PROMPT_FILE = paths.DATA / "fineweb.test.txt"
 
 
 def metrics_pack(server, results_path_size):

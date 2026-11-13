@@ -1,0 +1,40 @@
+
+
+Loading model... |-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\ 
+
+▄▄ ▄▄
+██ ██
+██ ██  ▀▀█▄ ███▄███▄  ▀▀█▄    ▄████ ████▄ ████▄
+██ ██ ▄█▀██ ██ ██ ██ ▄█▀██    ██    ██ ██ ██ ██
+██ ██ ▀█▄██ ██ ██ ██ ▀█▄██ ██ ▀████ ████▀ ████▀
+                                    ██    ██
+                                    ▀▀    ▀▀
+
+build      : b1-e95426f
+model      : /home/daniel/m0/registry/Qwen3.8-27B-UD-Q4_K_M.gguf
+ftype      : Q4_K - Medium
+modalities : text
+
+available commands:
+  /exit or Ctrl+C     stop or exit
+  /regen              regenerate the last response
+  /clear              clear the chat history
+  /read <file>        add a text file
+  /glob <pattern>     add text files using globbing pattern
+
+
+
+> The forest path wound between the ancient pines while the machine counted quietly through the evening hours, measuring every step.
+The forest path wound between the ancient pines while the machine counted quietly through the evening hours, measuring every step.
+The forest path wound between the ancient pines while the machine counted quietly through the evening hours, measuring every step.
+The forest path wound between the ancient pines while the machine counted quietly through the evening hours ... (truncated)
+
+[Start thinking]
+
+We need to respond to user. User provided repeated line 70 times? Need infer likely task? They just pasted repeated sentence. We need answer likely ask? No explicit question. Need maybe detect repetition? Could be prompt injection? Need final answer. Need consider if user expects something? Could be test for handling
+
+[ Prompt: 56.0 t/s | Generation: 4.2 t/s ]
+
+> 
+
+Exiting...

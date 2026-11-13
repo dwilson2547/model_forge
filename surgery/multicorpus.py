@@ -5,10 +5,10 @@ one corpus improving while others regress. Usage:
   python multicorpus.py <label> <model.gguf> [<label> <model.gguf> ...]
 Appends rows to multicorpus-results.jsonl.
 
-Paths default to the Altra layout; any other host sets
+Paths come from surgery/paths.py (FORGE_ROOT, default ~/forge); overrides:
   FORGE_LLAMA    llama.cpp checkout with build/bin   (default ~/llama.cpp)
-  FORGE_DATA     dir holding wiki/fineweb/code .test.txt (default ~/m0/data)
-  FORGE_RESULTS  results jsonl                       (default ~/m0/runs/multicorpus-results.jsonl)
+  FORGE_DATA     dir holding wiki/fineweb/code .test.txt (default $FORGE_ROOT/data)
+  FORGE_RESULTS  results jsonl                       (default $FORGE_ROOT/results/multicorpus.jsonl)
   FORGE_NGL      -ngl for CUDA builds (see evaluate.py)
 """
 
@@ -18,17 +18,16 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from surgery import evaluate  # noqa: E402
+from surgery import evaluate, paths  # noqa: E402
 
-HOME = Path.home()
-LLAMA = os.environ.get("FORGE_LLAMA", str(HOME / "llama.cpp"))
-DATA = Path(os.environ.get("FORGE_DATA", str(HOME / "m0" / "data")))
+LLAMA = str(paths.LLAMA)
+DATA = paths.DATA
 CORPORA = {
     "wikitext": str(DATA / "wiki.test.txt"),
     "fineweb": str(DATA / "fineweb.test.txt"),
     "code": str(DATA / "code.test.txt"),
 }
-OUT = Path(os.environ.get("FORGE_RESULTS", str(HOME / "m0" / "runs" / "multicorpus-results.jsonl")))
+OUT = Path(os.environ.get("FORGE_RESULTS", str(paths.RESULTS / "multicorpus.jsonl")))
 
 
 def main():

@@ -1,0 +1,40 @@
+
+
+Loading model... |-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/- 
+
+▄▄ ▄▄
+██ ██
+██ ██  ▀▀█▄ ███▄███▄  ▀▀█▄    ▄████ ████▄ ████▄
+██ ██ ▄█▀██ ██ ██ ██ ▄█▀██    ██    ██ ██ ██ ██
+██ ██ ▀█▄██ ██ ██ ██ ▀█▄██ ██ ▀████ ████▀ ████▀
+                                    ██    ██
+                                    ▀▀    ▀▀
+
+build      : b1-e95426f
+model      : /home/daniel/m0/registry/Qwen3.8-27B-Q8_0.gguf
+ftype      : Q8_0
+modalities : text
+
+available commands:
+  /exit or Ctrl+C     stop or exit
+  /regen              regenerate the last response
+  /clear              clear the chat history
+  /read <file>        add a text file
+  /glob <pattern>     add text files using globbing pattern
+
+
+
+> The forest path wound between the ancient pines while the machine counted quietly through the evening hours, measuring every step.
+The forest path wound between the ancient pines while the machine counted quietly through the evening hours, measuring every step.
+The forest path wound between the ancient pines while the machine counted quietly through the evening hours, measuring every step.
+The forest path wound between the ancient pines while the machine counted quietly through the evening hours ... (truncated)
+
+[Start thinking]
+
+We need respond to user. User sent repeated sentence many times. Need infer intent? Likely a prompt injection? The user only gave repetitive text. Need produce helpful response. Maybe they expect continuation? Could be testing. We need answer in same language? User English. Need maybe acknowledge repetition and ask what they'd like.
+
+[ Prompt: 90.9 t/s | Generation: 3.0 t/s ]
+
+> 
+
+Exiting...

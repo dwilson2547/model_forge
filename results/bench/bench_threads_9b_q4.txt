@@ -1,0 +1,18 @@
+| model                          |       size |     params | backend    | threads |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | ------: | --------------: | -------------------: |
+| qwen35 9B Q4_K - Medium        |   5.28 GiB |     8.95 B | CPU        |      16 |           pp512 |         58.43 ± 0.60 |
+| qwen35 9B Q4_K - Medium        |   5.28 GiB |     8.95 B | CPU        |      16 |           tg128 |         13.14 ± 0.02 |
+| qwen35 9B Q4_K - Medium        |   5.28 GiB |     8.95 B | CPU        |      32 |           pp512 |        106.93 ± 1.82 |
+| qwen35 9B Q4_K - Medium        |   5.28 GiB |     8.95 B | CPU        |      32 |           tg128 |         14.61 ± 0.05 |
+| qwen35 9B Q4_K - Medium        |   5.28 GiB |     8.95 B | CPU        |      48 |           pp512 |        141.95 ± 1.07 |
+| qwen35 9B Q4_K - Medium        |   5.28 GiB |     8.95 B | CPU        |      48 |           tg128 |         14.48 ± 0.00 |
+| qwen35 9B Q4_K - Medium        |   5.28 GiB |     8.95 B | CPU        |      64 |           pp512 |        180.30 ± 2.65 |
+| qwen35 9B Q4_K - Medium        |   5.28 GiB |     8.95 B | CPU        |      64 |           tg128 |         14.35 ± 0.02 |
+| qwen35 9B Q4_K - Medium        |   5.28 GiB |     8.95 B | CPU        |      80 |           pp512 |        201.09 ± 0.18 |
+| qwen35 9B Q4_K - Medium        |   5.28 GiB |     8.95 B | CPU        |      80 |           tg128 |         14.14 ± 0.16 |
+| qwen35 9B Q4_K - Medium        |   5.28 GiB |     8.95 B | CPU        |      96 |           pp512 |        221.00 ± 2.90 |
+| qwen35 9B Q4_K - Medium        |   5.28 GiB |     8.95 B | CPU        |      96 |           tg128 |         12.74 ± 0.83 |
+| qwen35 9B Q4_K - Medium        |   5.28 GiB |     8.95 B | CPU        |     128 |           pp512 |        210.40 ± 3.01 |
+| qwen35 9B Q4_K - Medium        |   5.28 GiB |     8.95 B | CPU        |     128 |           tg128 |          1.70 ± 0.00 |
+
+build: e95426f (1)

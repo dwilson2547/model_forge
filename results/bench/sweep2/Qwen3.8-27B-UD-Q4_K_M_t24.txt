@@ -1,0 +1,40 @@
+
+
+Loading model... |-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/ 
+
+▄▄ ▄▄
+██ ██
+██ ██  ▀▀█▄ ███▄███▄  ▀▀█▄    ▄████ ████▄ ████▄
+██ ██ ▄█▀██ ██ ██ ██ ▄█▀██    ██    ██ ██ ██ ██
+██ ██ ▀█▄██ ██ ██ ██ ▀█▄██ ██ ▀████ ████▀ ████▀
+                                    ██    ██
+                                    ▀▀    ▀▀
+
+build      : b1-e95426f
+model      : /home/daniel/m0/registry/Qwen3.8-27B-UD-Q4_K_M.gguf
+ftype      : Q4_K - Medium
+modalities : text
+
+available commands:
+  /exit or Ctrl+C     stop or exit
+  /regen              regenerate the last response
+  /clear              clear the chat history
+  /read <file>        add a text file
+  /glob <pattern>     add text files using globbing pattern
+
+
+
+> The forest path wound between the ancient pines while the machine counted quietly through the evening hours, measuring every step.
+The forest path wound between the ancient pines while the machine counted quietly through the evening hours, measuring every step.
+The forest path wound between the ancient pines while the machine counted quietly through the evening hours, measuring every step.
+The forest path wound between the ancient pines while the machine counted quietly through the evening hours ... (truncated)
+
+[Start thinking]
+
+We need answer to user. User sent a long repeated sentence 60? times. Need infer what they want. No explicit question. Maybe they expect continuation, or count? Could be prompt injection? Need respond helpfully. Since user only provided repeated sentence, perhaps they want us to notice repetition, ask what they
+
+[ Prompt: 56.4 t/s | Generation: 4.6 t/s ]
+
+> 
+
+Exiting...

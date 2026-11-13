@@ -77,6 +77,8 @@ def load_recipe(path_or_dict: Any) -> Recipe:
         raw = yaml.safe_load(pathlib.Path(path_or_dict).read_text())
     else:
         raw = path_or_dict
+    from surgery.paths import expand  # sets FORGE_ROOT if unset
+    raw = expand(raw)
 
     ops = []
     for entry in raw["ops"]:

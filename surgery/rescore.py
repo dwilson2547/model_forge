@@ -4,10 +4,10 @@ Compares the fixed per-layer scores cos(out[i-1], out[i]) averaged over multiple
 calibration windows against a previous run's recorded layer_scores, and reports
 the ranked pick sets for the requested drop counts. Example:
 
-  python rescore.py --hf-dir ~/m0/registry/Qwen3.5-4B \
-      --old ~/m0/runs/qwen35-4b-drop2-ranked/results.json \
-      --calib ~/m0/data/wiki.train.txt --counts 2 4 6 \
-      --out ~/m0/runs/rescore-4b/ranking-v2.json
+  python rescore.py --hf-dir ~/forge/base/Qwen/Qwen3.5-4B \
+      --old ~/forge/runs/qwen35-4b/slice/drop2-ranked/results.json \
+      --calib ~/forge/data/wiki.train.txt --counts 2 4 6 \
+      --out ~/forge/runs/qwen35-4b/rescore/ranking-v2.json
 """
 import argparse
 import json

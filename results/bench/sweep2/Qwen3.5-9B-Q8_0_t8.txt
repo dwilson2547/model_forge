@@ -1,0 +1,44 @@
+
+
+Loading model... |-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/ 
+
+▄▄ ▄▄
+██ ██
+██ ██  ▀▀█▄ ███▄███▄  ▀▀█▄    ▄████ ████▄ ████▄
+██ ██ ▄█▀██ ██ ██ ██ ▄█▀██    ██    ██ ██ ██ ██
+██ ██ ▀█▄██ ██ ██ ██ ▀█▄██ ██ ▀████ ████▀ ████▀
+                                    ██    ██
+                                    ▀▀    ▀▀
+
+build      : b1-e95426f
+model      : /home/daniel/m0/registry/Qwen3.5-9B-Q8_0.gguf
+ftype      : Q8_0
+modalities : text
+
+available commands:
+  /exit or Ctrl+C     stop or exit
+  /regen              regenerate the last response
+  /clear              clear the chat history
+  /read <file>        add a text file
+  /glob <pattern>     add text files using globbing pattern
+
+
+
+> The forest path wound between the ancient pines while the machine counted quietly through the evening hours, measuring every step.
+The forest path wound between the ancient pines while the machine counted quietly through the evening hours, measuring every step.
+The forest path wound between the ancient pines while the machine counted quietly through the evening hours, measuring every step.
+The forest path wound between the ancient pines while the machine counted quietly through the evening hours ... (truncated)
+
+[Start thinking]
+
+Thinking Process:
+
+1.  **Analyze the Request:**
+    *   Input: A repeated sentence ("The forest path wound between the ancient pines while the machine counted quietly through the evening hours, measuring every step.") repeated many times (looks like around 50+ times).
+    *   Task
+
+[ Prompt: 270.9 t/s | Generation: 7.1 t/s ]
+
+> 
+
+Exiting...

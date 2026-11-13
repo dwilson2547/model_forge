@@ -24,6 +24,11 @@ triage-SFT arc landed v3 (`qwen35-4b-drop2-sftv3-triage`). Measured story so far
 - `surgery/` — ranking, ops, recipes, GPU QLoRA recovery, triage-corpus extraction
 - `bench/` — serve harness + task board (chat-mode grading)
 - `recipes/`, `cards/` — provenance per candidate / keeper
+- `scripts/<family>/` — experiment drivers; `scripts/legacy/` — the old loose box scripts, as a record
+- `publish/` — HF publish scripts
+- `results/` — the ledgers (multicorpus, bench, longwindow) behind every number in `design.md`
+- `docs/storage.md` — where weights live: `~/forge/` working tree on each machine, `/mnt/models` cold
+  archive, and the map from the old `~/m0` / `~/forge-gpu` paths
 - `forge/` CLI + funnel (M3, not started)
 
 Plays well with the rest of the `ai` domain: serving stays on `gpu-scheduler`; recovery fine-tuning runs on the desktop/cluster GPUs (QLoRA), surgery + eval + quantize on the Altra.

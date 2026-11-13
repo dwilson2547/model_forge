@@ -1,9 +1,9 @@
 # Drop-policy gradient: 6 ranked drops, min_gap 2 (no adjacent layers), fuse_pairs=false.
 name: qwen35-4b-drop6-ranked
-base_dir: /home/daniel/m0/registry/Qwen3.5-4B
-out_dir: /home/daniel/m0/runs/qwen35-4b-drop6-ranked
+base_dir: ${FORGE_ROOT}/base/Qwen/Qwen3.5-4B
+out_dir: ${FORGE_ROOT}/runs/qwen35-4b/slice/drop6-ranked
 llamacpp_dir: /home/daniel/llama.cpp
-calib_file: /home/daniel/m0/data/wiki.test.txt
+calib_file: ${FORGE_ROOT}/data/wiki.test.txt
 ops:
   - op: drop_layers
     count: 6

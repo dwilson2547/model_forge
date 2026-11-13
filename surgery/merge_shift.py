@@ -9,7 +9,7 @@ delta is the merge shift, not an engine difference. Not directly comparable to
 llama.cpp floors (tokenization/BOS details differ) - compare within the pair.
 
   python merge_shift.py --hf-dir <merged-bf16 out> --adapter <ckpt/final/repair> \
-      --base <edited base hf dir> --data-dir ~/forge-gpu/data [--chunks 24]
+      --base <edited base hf dir> --data-dir ~/forge/data [--chunks 24]
 """
 import argparse
 import json

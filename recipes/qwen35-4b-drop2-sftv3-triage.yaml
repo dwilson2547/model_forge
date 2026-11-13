@@ -11,12 +11,12 @@
 name: qwen35-4b-drop2-sftv3-triage
 base:
   model: Qwen/Qwen3.5-4B
-  hf_dir: /home/daniel/m0/registry/Qwen3.5-4B          # pristine source (graft donor)
-calib_file: /home/daniel/m0/data/wiki.test.txt
+  hf_dir: ${FORGE_ROOT}/base/Qwen/Qwen3.5-4B          # pristine source (graft donor)
+calib_file: ${FORGE_ROOT}/data/wiki.test.txt
 
 surgery:                                              # -> hf-edited (34 layers, 3.76B)
-  base_dir: /home/daniel/m0/registry/Qwen3.5-4B
-  out_dir: /home/daniel/m0/runs/qwen35-4b-drop2-ranked
+  base_dir: ${FORGE_ROOT}/base/Qwen/Qwen3.5-4B
+  out_dir: ${FORGE_ROOT}/runs/qwen35-4b/slice/drop2-ranked
   llamacpp_dir: /home/daniel/llama.cpp
   ops:
     - op: drop_layers
@@ -26,15 +26,15 @@ surgery:                                              # -> hf-edited (34 layers,
       # measured outcome: dropped layers 24 and 28 (2026-11-08 gradient board)
 
 mtp_graft:                                           # LM Studio asserts nextn.*; pipeline drops them
-  donor: /home/daniel/m0/registry/Qwen3.5-4B         # 15 pristine mtp.* tensors
-  script: ~/m0/graft_sft3.py                         # per-candidate sed of graft_mtp.py
+  donor: ${FORGE_ROOT}/base/Qwen/Qwen3.5-4B         # 15 pristine mtp.* tensors
+  script: scripts/legacy/ampere/graft_sft3.py                         # per-candidate sed of graft_mtp.py
 
 dataset:                                             # homelab-private; regenerate, never commit
   extractor: surgery/corpus_triage.py
   command: >
     PGPASSWORD=... python surgery/corpus_triage.py
-      --out /home/daniel/forge-gpu/data/
-      --mixed /home/daniel/forge-gpu/data/mixed.train.txt
+      --out ${FORGE_ROOT}/data/
+      --mixed ${FORGE_ROOT}/data/mixed.train.txt
       --mixed-chars 6000000 --holdout 10,28,46
   composition:                                       # 3448 records (+32 dropped >ctx-24 tokens)
     operator_turns_x4: 62              # 3 session protocols from the incident history
@@ -45,13 +45,13 @@ dataset:                                             # homelab-private; regenera
 
 recovery:                                            # QLoRA on the 5080; 20 min, 3.2 GiB VRAM
   trainer: surgery/recover_gpu.py
-  hf_dir: /home/daniel/forge-gpu/hf-edited           # sliced checkpoint
+  hf_dir: ${FORGE_ROOT}/runs/qwen35-4b/slice/drop2-ranked/hf-edited           # sliced checkpoint
   command: >
-    python surgery/recover_gpu.py ~/forge-gpu/hf-edited
-      --sft-dataset ~/forge-gpu/data/sft-v3-dataset.jsonl
+    python surgery/recover_gpu.py ${FORGE_ROOT}/runs/qwen35-4b/slice/drop2-ranked/hf-edited
+      --sft-dataset ${FORGE_ROOT}/data/sft-v3-dataset.jsonl
       --ctx 6144 --batch 1 --accum 4 --epochs 2
       --lora-r 16 --lr 1e-4 --save-every 200
-      --out ~/forge-gpu/drop2-repair-sft3
+      --out ${FORGE_ROOT}/runs/qwen35-4b/drop2-repair/sft3
   lora_r: 16
   lr: 1e-4
   format: sft-chat-v3                   # native think-open/reason/closed/answer targets
@@ -61,7 +61,7 @@ recovery:                                            # QLoRA on the 5080; 20 min
 conversion:                                          # on the Altra
   convert: convert_hf_to_gguf.py --outtype f16
   quants: [Q4_K_M]                     # --allow-requantize --leave-output-tensor
-  out_dir: /home/daniel/m0/lmstudio-out/sftrep3
+  out_dir: ${FORGE_ROOT}/runs/qwen35-4b/drop2-repair/sft3/gguf
 
 evaluation:
   bench: bench.runner --chat           # coding docker-graded, instruct, needle@7.5k, loop-thresh

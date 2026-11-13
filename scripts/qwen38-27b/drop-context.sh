@@ -1,6 +1,6 @@
 #!/bin/bash
 # 27B drop-for-context experiment, unrepaired rows (design §0j.10), on the Altra.
-#   nohup bash ~/model-forge/scripts/27b-drop-context.sh > ~/m0/runs/drop27/driver.log 2>&1 &
+#   nohup bash ~/model-forge/scripts/qwen38-27b/drop-context.sh > ~/forge/runs/qwen38-27b/drop-context/driver.log 2>&1 &
 # 1. fixed scorer, 10 windows, picks for 4/6/8/13          (~2.3 h, ~150 GB RAM)
 # 2. per k: GGUF slice of the §0j.4 BF16 source -> IQ3_M with the base imatrix remapped
 #    -> floor. This is the user's comparison: against unsliced IQ3_M 6.129 / 8.697 / 2.565.
@@ -10,11 +10,14 @@
 set -euo pipefail
 trap 'echo "=== FAILED at line $LINENO: $BASH_COMMAND $(date -Is) ==="' ERR
 
-OUT=~/m0/runs/drop27
+ROOT=${FORGE_ROOT:-~/forge}
+export FORGE_ROOT=$ROOT
+B=$ROOT/runs/qwen38-27b/baseline
+OUT=$ROOT/runs/qwen38-27b/drop-context
 LLAMA=~/llama.cpp/build/bin
-SRC=~/m0/baseline-27b/src-bf16/Qwen3.8-27B-BF16-00001-of-00002.gguf
-IMAT=~/m0/baseline-27b/imatrix-27b-bf16.dat
-RESULTS=~/m0/runs/multicorpus-results.jsonl
+SRC=$B/src-bf16/Qwen3.8-27B-BF16-00001-of-00002.gguf
+IMAT=$B/imatrix-27b-bf16.gguf
+RESULTS=$ROOT/results/multicorpus.jsonl
 SCORES=$OUT/rescore-10win.json
 COUNTS="4 6 8 13"
 mkdir -p "$OUT"
@@ -32,7 +35,7 @@ slice_bf16() {
 
 if [ ! -s "$SCORES" ]; then
   log "[1] rescore 10 windows"
-  python surgery/rescore.py --hf-dir ~/m0/registry/Qwen3.8-27B --calib ~/m0/data/wiki.train.txt \
+  python surgery/rescore.py --hf-dir $ROOT/base/Qwen/Qwen3.8-27B --calib $ROOT/data/wiki.train.txt \
     --counts $COUNTS --windows 10 --threads 96 --out "$SCORES.tmp" > "$OUT/rescore-10win.log" 2>&1
   mv "$SCORES.tmp" "$SCORES"
 fi

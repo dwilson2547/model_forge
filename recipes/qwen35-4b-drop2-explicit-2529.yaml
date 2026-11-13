@@ -3,8 +3,8 @@
 # (cos(in_i,out_i), 10 windows, wikitext calib) prefers [25,29]. Same protective
 # rules as the shipped drop2 recipes (full_attention protected, min_gap 2).
 name: qwen35-4b-drop2-explicit-2529
-base_dir: /home/daniel/m0/registry/Qwen3.5-4B
-out_dir: /home/daniel/m0/runs/qwen35-4b-drop2-explicit-2529
+base_dir: ${FORGE_ROOT}/base/Qwen/Qwen3.5-4B
+out_dir: ${FORGE_ROOT}/runs/qwen35-4b/slice/drop2-explicit-2529
 llamacpp_dir: /home/daniel/llama.cpp
 ops:
   - op: drop_layers

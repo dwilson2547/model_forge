@@ -1,0 +1,36 @@
+{"label": "base", "model": "/home/daniel/m0/runs/qwen35-4b-base/qwen35-4b-base-f16.gguf", "wikitext": 9.3276, "fineweb": 10.4406, "code": 3.1725}
+{"label": "drop2", "model": "/home/daniel/m0/runs/qwen35-4b-drop2-ranked/qwen35-4b-drop2-ranked-f16.gguf", "wikitext": 12.8205, "fineweb": 13.5539, "code": 3.572}
+{"label": "wiki-repaired", "model": "/home/daniel/m0/runs/drop2-repaired/repaired-f16.gguf", "wikitext": 8.1634, "fineweb": 19.4464, "code": 3.8979}
+{"label": "fw-repaired", "model": "/home/daniel/m0/runs/drop2-fw-repaired/fw-f16.gguf", "wikitext": 10.2203, "fineweb": 12.4662, "code": 3.578}
+{"label": "codefw-repaired", "model": "/home/daniel/m0/runs/drop2-codefw-repaired/codefw-f16.gguf", "wikitext": 9.9696, "fineweb": 12.3412, "code": 3.2816}
+{"label": "mixfull-repaired", "model": "/home/daniel/m0/runs/drop2-mixfull-repaired/mixfull-f16.gguf", "wikitext": 8.4229, "fineweb": 12.3872, "code": 3.3626}
+{"label": "r32", "model": "/home/daniel/m0/runs/drop2-r32-repaired/r32-f16.gguf", "wikitext": 10.6243, "fineweb": 12.9915, "code": 3.5679}
+{"label": "r64", "model": "/home/daniel/m0/runs/drop2-r64-repaired/r64-f16.gguf", "wikitext": 11.4828, "fineweb": 13.7333, "code": 3.6697}
+{"label": "r8", "model": "/home/daniel/m0/runs/drop2-r8-repaired/r8-f16.gguf", "wikitext": 10.0153, "fineweb": 12.41, "code": 3.3771}
+{"label": "lr1e4", "model": "/home/daniel/m0/runs/drop2-lr1e4-repaired/lr1e4-f16.gguf", "wikitext": 9.8727, "fineweb": 12.2174, "code": 3.3332}
+{"label": "lr4e4", "model": "/home/daniel/m0/runs/drop2-lr4e4-repaired/lr4e4-f16.gguf", "wikitext": 11.6374, "fineweb": 13.7354, "code": 3.7222}
+{"label": "drop2-r2fix-lr1e4", "model": "/home/daniel/m0/runs/drop2-repair-r2fix-lr1e4/r2fix-lr1e4-Q4_K_M.gguf", "wikitext": 8.6598, "fineweb": 12.7151, "code": 3.6261}
+{"label": "27b-q8-base", "model": "/home/daniel/m0/registry/Qwen3.8-27B-Q8_0.gguf", "wikitext": 5.893, "fineweb": 8.3572, "code": 2.5042}
+{"label": "27b-ud-q4km", "model": "/home/daniel/m0/registry/Qwen3.8-27B-UD-Q4_K_M.gguf", "wikitext": 5.9235, "fineweb": 8.4451, "code": 2.5156}
+{"label": "27b-q8-base", "model": "/home/daniel/m0/registry/Qwen3.8-27B-Q8_0.gguf", "wikitext": 5.893, "fineweb": 8.3572, "code": 2.5042}
+{"label": "27b-ud-q4km", "model": "/home/daniel/m0/registry/Qwen3.8-27B-UD-Q4_K_M.gguf", "wikitext": 5.9235, "fineweb": 8.4451, "code": 2.5156}
+{"label": "drop2-iso-classic-q4", "model": "/home/daniel/m0/runs/drop2-repair-iso-classic/iso-classic-Q4_K_M.gguf", "wikitext": 8.5662, "fineweb": 12.4521, "code": 3.5556}
+{"label": "drop2-iso-classic-f16", "model": "/home/daniel/m0/runs/drop2-repair-iso-classic/iso-classic-f16.gguf", "wikitext": 8.3648, "fineweb": 12.1039, "code": 3.5065}
+{"label": "drop2-iso-all-q4", "model": "/home/daniel/m0/runs/drop2-repair-iso-all/iso-all-Q4_K_M.gguf", "wikitext": 8.5649, "fineweb": 12.448, "code": 3.566}
+{"label": "drop2-iso-all-f16", "model": "/home/daniel/m0/runs/drop2-repair-iso-all/iso-all-f16.gguf", "wikitext": 8.3588, "fineweb": 12.221, "code": 3.5094}
+{"label": "27b-IQ3_M", "model": "/home/daniel/m0/baseline-27b/Qwen3.8-27B-IQ3_M.gguf", "wikitext": 6.1652, "fineweb": 8.7392, "code": 2.5614}
+{"label": "drop2-dose4e-q4", "model": "/home/daniel/m0/runs/drop2-repair-dose4e/dose4e-Q4_K_M.gguf", "wikitext": 10.4446, "fineweb": 15.6365, "code": 4.1869}
+{"label": "drop2-dose4e-f16", "model": "/home/daniel/m0/runs/drop2-repair-dose4e/dose4e-f16.gguf", "wikitext": 10.2835, "fineweb": 15.3855, "code": 4.0785}
+{"label": "drop2-2529-repair-f16", "model": "/home/daniel/m0/runs/drop2-repair-2529/2529-f16.gguf", "wikitext": 8.0309, "fineweb": 11.8939, "code": 3.4851}
+{"label": "drop2-2529-repair-q4", "model": "/home/daniel/m0/runs/drop2-repair-2529/2529-Q4_K_M.gguf", "wikitext": 8.2071, "fineweb": 12.166, "code": 3.5369}
+{"label": "27b-IQ3_M-srcbf16", "model": "/home/daniel/m0/baseline-27b/srcbf16-IQ3_M.gguf", "wikitext": 6.1289, "fineweb": 8.6969, "code": 2.5651}
+{"label": "27b-Q3_K_M-srcbf16", "model": "/home/daniel/m0/baseline-27b/srcbf16-Q3_K_M.gguf", "wikitext": 6.247, "fineweb": 8.7607, "code": 2.5928}
+{"label": "drop2-2529-unrepaired-f16", "model": "/home/daniel/m0/runs/drop2-unrep-2529/unrep-2529-f16.gguf", "wikitext": 12.8228, "fineweb": 13.9541, "code": 3.6104}
+{"label": "drop2-2529-unrepaired-q4", "model": "/home/daniel/m0/runs/drop2-unrep-2529/unrep-2529-Q4_K_M.gguf", "wikitext": 13.3571, "fineweb": 14.4012, "code": 3.6728}
+{"label": "drop2-2529-fresh1e-f16", "model": "/home/daniel/m0/runs/drop2-repair-2529-fresh1e/fresh1e-f16.gguf", "ngl": null, "wikitext": 7.7845, "fineweb": 11.5555, "code": 3.1864}
+{"label": "drop2-2529-fresh1e-q4", "model": "/home/daniel/m0/runs/drop2-repair-2529-fresh1e/fresh1e-Q4_K_M.gguf", "ngl": null, "wikitext": 7.9226, "fineweb": 11.8158, "code": 3.2271}
+{"label": "27b-drop4-unrep-IQ3_M", "model": "/home/daniel/m0/runs/drop27/drop4-IQ3_M.gguf", "ngl": null, "wikitext": 6.8746, "fineweb": 10.0712, "code": 2.6761}
+{"label": "27b-drop6-unrep-IQ3_M", "model": "/home/daniel/m0/runs/drop27/drop6-IQ3_M.gguf", "ngl": null, "wikitext": 7.0623, "fineweb": 10.4557, "code": 2.7142}
+{"label": "27b-drop8-unrep-IQ3_M", "model": "/home/daniel/m0/runs/drop27/drop8-IQ3_M.gguf", "ngl": null, "wikitext": 10.6665, "fineweb": 12.6469, "code": 2.9802}
+{"label": "27b-drop13-unrep-IQ3_M", "model": "/home/daniel/m0/runs/drop27/drop13-IQ3_M.gguf", "ngl": null, "wikitext": 13.1873, "fineweb": 15.6853, "code": 3.3651}
+{"label": "27b-drop4-unrep-Q8_0", "model": "/home/daniel/m0/runs/drop27/drop4-Q8_0.gguf", "ngl": null, "wikitext": 6.5549, "fineweb": 9.5957, "code": 2.6072}

@@ -2,8 +2,8 @@
 
 Run on the desktop with the DB port-forwarded:
     kubectl port-forward svc/postgres -n postgres 15432:5432 &
-    PGPASSWORD=... python surgery/corpus_triage.py --out ~/forge-gpu/data/ \
-        --mixed /home/daniel/forge-gpu/data/mixed.train.txt
+    PGPASSWORD=... python surgery/corpus_triage.py --out ~/forge/data/ \
+        --mixed ~/forge/data/mixed.train.txt
 
 Output: sft-v3-dataset.jsonl - records {"user", "reasoning", "answer"} in the native
 assistant format (training adds the think-close structure):
@@ -23,6 +23,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from surgery import paths  # noqa: E402
 
 
 def psql(query, dbname="incident_operator"):
@@ -139,7 +140,7 @@ def continuation_pairs(mixed_path, n_chars, tok_estimate=4):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True, help="output dir for sft-v3-dataset.jsonl")
-    ap.add_argument("--mixed", default="/home/daniel/forge-gpu/data/mixed.train.txt")
+    ap.add_argument("--mixed", default=str(paths.DATA / "mixed.train.txt"))
     ap.add_argument("--repo",
                     default="/home/daniel/documents/workspace/infra/incident-operator")
     ap.add_argument("--mixed-chars", type=int, default=6_000_000)
