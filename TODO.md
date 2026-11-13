@@ -148,7 +148,7 @@ Fixes + fired experiments recorded in design §0j.
       (MBPP/HumanEval-style, >=50–100 items, disjoint from any training corpus — r2 f8
       warns code.train and code.test are both llama.cpp), and an IFEval-style instruct
       set at the same scale; fixed seeds, greedy decoding
-- [ ] KLD row in the floor (llama-perplexity --kl-divergence-base on base, --kl-divergence
+- [x] KLD row in the floor (llama-perplexity --kl-divergence-base on base, --kl-divergence
       on candidates): distance-from-base that domain adaptation can't game
 - [ ] Incident-triage benchmark task (proof-of-concept 2026-11-08, LM Studio): candidate models
       analyze historical incident-operator reports (incident 46 = first sample: correct

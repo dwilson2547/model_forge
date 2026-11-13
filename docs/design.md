@@ -1177,6 +1177,55 @@ clearly more redundant per dropped layer than the 4B, though. 4B drop2 (6% of la
 unrepaired was +34% fineweb (13.95 vs 10.44); 27B drop4 (6%) is +16%. The repair question
 stays open until the larger drops land.
 
+### 0j.11 — KLD floor: perplexity was scoring train/test overlap, not repair (2026-11-13)
+
+**Why.** PPL rewards predicting a corpus; it ranked wikirep above the base on wikitext while
+wikirep looped forever (§0c). KL divergence against the base measures how far each model's
+next-token distribution moved, which domain adaptation can't game (TODO M2). Tool:
+`surgery/kld.py` (same 3 corpora, 24 chunks x 512 ctx as `multicorpus.py`); sweep:
+`scripts/qwen35-4b/kld-sweep.sh`; ledger `results/kld.jsonl`.
+
+**Setup.** Desktop RTX 5080, llama.cpp e95426f (CUDA, the Altra's commit). Base reference =
+`qwen35-4b-base-f16.gguf`; parity: base code PPL 3.1737 vs 3.17 on the Altra, and each arm's PPL
+is within 0.03 of its ledger row (sftrep3 had no floor row). Arms are the same f16 GGUFs the floors used (Altra), except
+lr3e-6, lr1e-6 and sftrep3, converted from their archived hf weights. Reference logits: 3.0 GB per
+corpus, deleted after. 11 arms; the rank/lr sweeps and SFT v1/v2 skipped (already settled).
+
+| arm | wiki PPL / KLD | fineweb PPL / KLD / top-1 | code PPL / KLD |
+|---|---|---|---|
+| unrep [24,28] | 12.82 / 0.284 | 13.55 / 0.272 / 79.0% | 3.572 / 0.142 |
+| unrep [25,29] | 12.81 / 0.316 | 13.95 / 0.300 / 76.6% | 3.610 / 0.149 |
+| wikirep | 8.17 / **0.660** | 19.47 / **0.715** / 65.2% | 3.901 / 0.268 |
+| codefw | 9.98 / 0.377 | 12.35 / 0.261 / 79.5% | 3.282 / 0.222 |
+| mixfull | 8.43 / 0.520 | 12.39 / 0.298 / 77.7% | 3.364 / 0.210 |
+| iso-all | 8.36 / 0.634 | 12.22 / 0.281 / 78.5% | 3.511 / 0.162 |
+| 2529-pass1 | 8.04 / 0.632 | 11.89 / 0.264 / 78.5% | 3.485 / **0.147** |
+| 2529-fresh1e | 7.78 / 0.561 | 11.55 / 0.223 / 80.3% | 3.185 / 0.212 |
+| full lr3e-6 | 7.63 / 0.573 | 11.36 / 0.227 / 80.2% | 3.257 / 0.247 |
+| full lr1e-6 | 7.69 / 0.535 | 11.38 / **0.212** / **81.4%** | 3.181 / 0.184 |
+| sftrep3 | 10.57 / 0.306 | 12.73 / 0.249 / 80.1% | 3.260 / 0.190 |
+
+**Findings.**
+1. **KLD catches the domain trap PPL missed.** wikirep: best-in-class wikitext PPL, worst KLD on
+   every corpus (2.3x the unrepaired wound on its own training domain).
+2. **The wikitext PPL wins are specialization.** Every repair beats the base on wikitext PPL
+   (7.6–8.4 vs 9.33) while roughly doubling wikitext KLD over the unrepaired wound (0.52–0.66 vs
+   0.28–0.32). The diets contain wikitext-103 train, so the wikitext row measured train/test overlap.
+3. **Code is the same, more mildly.** Repairs that reach base code PPL (fresh1e 3.185, lr1e-6 3.181)
+   do it by drifting further (KLD 0.21/0.18) than 2529-pass1 (0.147, worst-case p99 1.37, the lowest
+   of any arm). code.train and code.test are both llama.cpp (review r2 f8).
+4. **Fineweb is the honest row,** and there the repairs really do move toward the base: fresh1e
+   0.223 and full lr1e-6 0.212 (vs 0.300 unrepaired), top-1 agreement up 4–5 points. The ranking
+   holds there: fresh data and full weights at low lr are the best repairs; the lead is smaller
+   than the wiki/code PPL suggested.
+5. sftrep3 (SFT on the triage corpus) moves least on wikitext of any repair (0.306): chat-format
+   training doesn't learn the corpus style.
+
+**Consequences.** The floor reports KLD next to PPL from now on, and fineweb KLD is the headline
+repair metric; wikitext and code PPL need a held-out source disjoint from the training diet before
+they rank repairs again. Distillation (train on the base's distribution instead of corpus text,
+the next experiment) is judged on fineweb KLD and top-1, not on PPL.
+
 ## 5. Milestones
 
 Tracked in [`TODO.md`](../TODO.md); summary:
