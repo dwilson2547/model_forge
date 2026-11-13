@@ -50,6 +50,9 @@ The share is CIFS on spinning disk: slow, large, and reliable enough for archive
 
 ## Where the old paths went (migration of 2026-11-13)
 
+The Altra's move is `scripts/storage/migrate-ampere.sh` (renames only; it waits for the
+old-path drivers to finish). The desktop was moved by hand the same day.
+
 `design.md`, `TODO.md` and `docs/issues/` keep their historical paths; this table maps them.
 
 | Old | New |
@@ -65,6 +68,11 @@ The share is CIFS on spinning disk: slow, large, and reliable enough for archive
 | `~/m0/runs/rescore-27b/`, `rescore-4b/` | `runs/qwen38-27b/rescore/`, `runs/qwen35-4b/rescore/` |
 | `~/m0/runs/qwen35-4b-<name>/`, `drop2-unrep-2529/` | `runs/qwen35-4b/slice/<name>/`, `slice/drop2-unrep-2529/` |
 | `~/m0/runs/drop2-repair-<arm>/`, desktop `drop2-repair-<arm>/` | `runs/qwen35-4b/drop2-repair/<arm>/` |
+| desktop `drop2-repair/` (no suffix), Altra `drop2-repaired/` | `runs/qwen35-4b/drop2-repair/v1/` (the first repair) |
+| desktop `calib/`, `calib-r2fixes/` | `runs/qwen35-4b/drop2-repair/calib/`, `.../calib-r2fixes/` |
+| desktop loose `*.log`, `*.yaml` in `forge-gpu/` | `runs/qwen35-4b/drop2-repair/_logs/` |
+| Altra `~/m0/registry/Qwen3-1.7B-*.gguf` | `base/_origin-unrecorded/` (the source repo was never written down) |
+| Altra loose logs in `~/m0/`, `~/m0/runs/`, `~/m0/publish/` | `runs/_legacy-logs/` |
 | `~/m0/runs/drop2-<arm>-repaired/`, `<arm>-recovered/` | `runs/qwen35-4b/drop2-repair/<arm>/gguf/`, `.../<arm>/recovered/` |
 | desktop `hf-edited/`, `runs/qwen35-4b-drop2-explicit-2529/` | `runs/qwen35-4b/slice/drop2-ranked/hf-edited/`, `runs/qwen35-4b/slice/drop2-explicit-2529/` |
 | `~/m0/lmstudio-out/sftrep{2,3}/`, share `sftrep*/ codefw/ mixfull/ unrepaired/ wikirep/` | `forge/qwen35-4b/lmstudio-builds/<name>/` |

@@ -31,13 +31,13 @@ cd ~/documents/workspace/ai/model-forge
 B=<instance ssh alias>          # whatever `brev` set up in ~/.ssh/config
 rsync -a --exclude .git --exclude __pycache__ ./ $B:forge/
 ssh $B 'mkdir -p forge-data forge-runs'
-rsync -a ~/forge-gpu/data/{mixed.train.txt,wiki.test.txt,fineweb.test.txt,code.test.txt} $B:forge-data/
+rsync -a ~/forge/data/{mixed.train.txt,wiki.test.txt,fineweb.test.txt,code.test.txt} $B:forge-data/
 # the [25,29] slice (7.5 GB; not on HF). Re-upload per instance, or push it once to a
 # private HF repo and `hf download` it in-cloud instead (faster after the first time):
-rsync -a ~/forge-gpu/runs/qwen35-4b-drop2-explicit-2529/hf-edited/ $B:forge-runs/2529-hf-edited/
+rsync -a ~/forge/runs/qwen35-4b/slice/drop2-explicit-2529/hf-edited/ $B:forge-runs/2529-hf-edited/
 ```
 
-`wiki.test.txt` is the Altra's `~/m0/data/wiki.test.txt`, copied to the desktop
+`wiki.test.txt` is the Altra's `~/m0/data/wiki.test.txt` (now `~/forge/data/`), copied to the desktop
 2026-11-12. All four test corpora must be the floor's exact files.
 
 ## 2. Bootstrap (once per instance)
