@@ -24,7 +24,7 @@ drop2 [25,29] 12.823 / 13.954 / 3.610. The best PPL floors are 2529-fresh1e (QLo
 | drop2-repair | [dose4e](dose4e.md) | iso-all repeated for 4 epochs over the same 12M-char draw | 10.284 / 15.386 / 4.079 | deleted |
 | drop2-repair | [2529-pass1](2529-pass1.md) | The iso-all protocol on the [25,29] wound instead of [24,28] | 8.031 / 11.894 / 3.485 | archive |
 | drop2-repair | [2529-fresh1e](2529-fresh1e.md) | The [25,29] slice repaired on the WHOLE mixed file for one epoch | 7.785 / 11.556 / 3.186 | archive |
-| drop2-repair | [2529-distill](2529-distill.md) | fresh1e's recipe distilled from the base (KL loss); KLD 0.141 / 0.147 / 0.067 | 9.992 / 11.801 / 3.280 | archive |
+| drop2-repair | [2529-distill](2529-distill.md) | fresh1e's recipe distilled from the base (KL loss); KLD 0.141 / 0.147 / 0.067; board ties base (0.867) | 9.992 / 11.801 / 3.280 | archive |
 | drop2-repair | [sftrep1](sftrep1.md) | First SFT-format repair | chat board 0.0 (coding 0, instruct 0, needle 0) | archive |
 | drop2-repair | [sftrep2](sftrep2.md) | SFT v2 | chat board 0.333 (coding 0, instruct 0, needle 1.0) | archive |
 | drop2-repair | [sftrep3](sftrep3.md) | SFT v3 | chat board 0.733 (coding 1.0, instruct 0.2, needle 1.0) | archive |

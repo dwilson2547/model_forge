@@ -1283,6 +1283,24 @@ it (teacher = the uncut 27B, which does not fit beside the student on the 5080: 
 precomputed offline, or the cloud lane). Before it replaces fresh1e on the M5 shelf it needs the
 task/chat board: KLD says it is closer to the base, the board says whether that buys behaviour.
 
+**Board (2026-11-13, chat mode, desktop 5080, `-ngl 99`, f16; `scripts/qwen35-4b/board-2529.sh`).**
+GPU rows are their own surface, so base and the wound were re-run beside the repairs:
+
+| arm | coding | instruct | needle | composite | loop-thresh | gen t/s |
+|---|---:|---:|---:|---:|---:|---:|
+| base | 1.0 | 0.6 | 1.0 | **0.867** | 0.7 | 72.9 |
+| unrepaired [25,29] | 0.75 | 0.6 | 1.0 | **0.783** | 0.7 | 83.2 |
+| 2529-fresh1e | 1.0 | 0.6 | 1.0 | **0.867** | 0.7 | 87.8 |
+| **2529-distill** | 1.0 | 0.6 | 1.0 | **0.867** | 0.7 | 86.4 |
+
+Base on the GPU reproduced its CPU chat row exactly (§0h). The wound's only loss is a syntax
+error (`import from collections` in code-wordfreq); both repairs fix it, and both miss the same two
+instruct tasks base misses (exact word count, constraint set). **The board is saturated at this
+wound:** it cannot separate the repairs from each other or from base. The distill arm costs nothing
+on behaviour and is closer by every KLD row, so it replaces fresh1e on the shelf. Ranking repairs
+against each other from here needs either a harder board or KLD; the 9-task v1 board only catches
+gross damage.
+
 ## 5. Milestones
 
 Tracked in [`TODO.md`](../TODO.md); summary:

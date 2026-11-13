@@ -3,7 +3,7 @@
 The [25,29] slice repaired by distillation from the unsliced base: fresh1e's recipe with the loss
 swapped from next-token CE to KL(base || slice).
 
-- **Status:** working copy on the desktop; archived to the cold share
+- **Status:** shelf pick for [25,29] (replaces fresh1e); archived to the cold share
 - **Design:** `docs/design.md` §0j.12
 - **Trained:** 2026-11-13, desktop RTX 5080 (2.1 h)
 
@@ -40,8 +40,20 @@ KL divergence from the base, lower is better (`surgery/kld.py`, 24 chunks x 512;
 
 The 99th-percentile KLD falls with it (fineweb 1.84 vs fresh1e 2.40; code 0.80 vs 2.39).
 
+## Board
+
+Chat mode, desktop 5080, f16 (design §0j.12; ledger `results/bench.jsonl`, labels `@5080`).
+
+| | coding | instruct | needle | composite | loop-thresh |
+|---|---:|---:|---:|---:|---:|
+| base | 1.0 | 0.6 | 1.0 | 0.867 | 0.7 |
+| unrepaired [25,29] | 0.75 | 0.6 | 1.0 | 0.783 | 0.7 |
+| 2529-fresh1e | 1.0 | 0.6 | 1.0 | 0.867 | 0.7 |
+| **this arm** | 1.0 | 0.6 | 1.0 | **0.867** | 0.7 |
+
 ## Verdict
 
-**Closest to the base of any repair, on every corpus, by a wide margin.** Its PPL is higher than
-fresh1e's because it no longer specializes on the training diet. Not yet run on the task or chat
-board: that is the behavioural check before it replaces fresh1e on the shelf.
+**Closest to the base of any repair, on every corpus, by a wide margin, and it ties base on the
+board.** Its PPL is higher than fresh1e's because it no longer specializes on the training diet.
+The board cannot tell it from fresh1e (both tie base), so KLD decides: this arm replaces fresh1e on
+the shelf.
