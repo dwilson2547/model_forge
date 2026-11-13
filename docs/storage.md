@@ -44,9 +44,14 @@ The share is CIFS on spinning disk: slow, large, and reliable enough for archive
 - **Delete without archiving:** anything rebuildable in under about an hour, such as
   unrepaired slices, ranked/fused cuts and quant intermediates. Their numbers are already
   in the ledgers.
-- **Each archived arm gets a `SOURCE.md`:** the repo commit, the design §, what built it,
-  and `sha256` of each weight file. Verify against it after the copy and before deleting
-  the local copy.
+- **Each archived arm carries its card.** Every trained arm has a card in the repo,
+  `cards/arms/<family>/<arm>.md`: what it is, its old folder names, the recipe, the floor
+  and the verdict. `cards/arms/<family>/README.md` is the one-line-per-arm index. Write
+  the card when the arm lands, not at archive time.
+- **Archive with `scripts/storage/archive-arm.sh <family> <experiment> <arm>`.** It copies
+  `hf/`, `adapter/`, any `.gguf` and the run json, writes `SHA256SUMS` and a `README.md`
+  (the card plus the commit and hashes), and re-hashes on the share. `--delete-local`
+  removes the local weights only after every hash matches.
 
 ## Where the old paths went (migration of 2026-11-13)
 
@@ -67,8 +72,9 @@ old-path drivers to finish). The desktop was moved by hand the same day.
 | `~/m0/runs/drop27/` | `runs/qwen38-27b/drop-context/` |
 | `~/m0/runs/rescore-27b/`, `rescore-4b/` | `runs/qwen38-27b/rescore/`, `runs/qwen35-4b/rescore/` |
 | `~/m0/runs/qwen35-4b-<name>/`, `drop2-unrep-2529/` | `runs/qwen35-4b/slice/<name>/`, `slice/drop2-unrep-2529/` |
-| `~/m0/runs/drop2-repair-<arm>/`, desktop `drop2-repair-<arm>/` | `runs/qwen35-4b/drop2-repair/<arm>/` |
-| desktop `drop2-repair/` (no suffix), Altra `drop2-repaired/` | `runs/qwen35-4b/drop2-repair/v1/` (the first repair) |
+| `~/m0/runs/drop2-repair-<arm>/`, desktop `drop2-repair-<arm>/` | `runs/qwen35-4b/drop2-repair/<arm>/`, renamed to the design.md arm names: each card lists its old names |
+| desktop `cloud-session1/run1-full-lr<lr>/` | `runs/qwen35-4b/full-repair-2529/lr<lr>/` |
+| desktop `drop2-repair/` (no suffix), Altra `drop2-repaired/` | `runs/qwen35-4b/drop2-repair/wikirep/` (the first repair) |
 | desktop `calib/`, `calib-r2fixes/` | `runs/qwen35-4b/drop2-repair/calib/`, `.../calib-r2fixes/` |
 | desktop loose `*.log`, `*.yaml` in `forge-gpu/` | `runs/qwen35-4b/drop2-repair/_logs/` |
 | Altra `~/m0/registry/Qwen3-1.7B-*.gguf` | `base/_origin-unrecorded/` (the source repo was never written down) |

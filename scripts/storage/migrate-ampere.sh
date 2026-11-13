@@ -46,8 +46,11 @@ for d in $O/runs/qwen35-4b-*; do [ -e "$d" ] || continue; n=${d##*/qwen35-4b-}; 
 # after the loop: slice/base must be the moved qwen35-4b-base dir, not a fresh mkdir
 mvv $O/runs/base-with-mtp-f16.gguf $R4/slice/base/base-with-mtp-f16.gguf
 mvv $O/runs/drop2-unrep-2529 $R4/slice/drop2-unrep-2529
+# arm names follow design.md (cards/arms/qwen35-4b/), not the old folder names
+mvv $O/runs/drop2-repair-2529 $R4/drop2-repair/2529-pass1
+for s in sft:sftrep1 sft2:sftrep2 sft3:sftrep3; do mvv $O/runs/drop2-repair-${s%%:*}-hf $R4/drop2-repair/${s##*:}/hf; done
 for d in $O/runs/drop2-repair-*; do [ -e "$d" ] || continue; n=${d##*/drop2-repair-}; mvv "$d" "$R4/drop2-repair/$n"; done
-mvv $O/runs/drop2-repaired $R4/drop2-repair/v1/gguf
+mvv $O/runs/drop2-repaired $R4/drop2-repair/wikirep/gguf
 for d in $O/runs/drop2-*-repaired; do [ -e "$d" ] || continue; n=${d##*/drop2-}; n=${n%-repaired}; mvv "$d" "$R4/drop2-repair/$n/gguf"; done
 for d in $O/runs/*-recovered; do [ -e "$d" ] || continue; n=${d##*/}; n=${n%-recovered}; mvv "$d" "$R4/drop2-repair/$n/recovered"; done
 mvv $O/runs/iso-eval.log $F/runs/_legacy-logs/iso-eval.log
