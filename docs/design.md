@@ -1143,6 +1143,23 @@ Tooling and timings (measured 2026-11-13, Altra):
 - **Driver:** `scripts/27b-drop-context.sh`. Labels are `27b-drop{k}-unrep-IQ3_M` and
   `-Q8_0`. A 27B floor is about 70 min on the CPU.
 
+10-window picks (the scorer run took 2.2 h): drop4 [1,4,12,16], drop6 [1,4,9,12,14,16], drop8
+[1,4,6,9,12,14,16,18], drop13 adds [22,29,32,41,45]. All linear-attention.
+
+Unrepaired rows, IQ3_M with the base imatrix remapped (the driver fills this in as rows land):
+
+| 27B variant | size | wikitext | fineweb | code |
+|---|---:|---:|---:|---:|
+| IQ3_M unsliced (§0j.4 bar) | 11.89 GiB | 6.129 | 8.697 | 2.565 |
+| drop4 unrepaired IQ3_M | 11.24 GiB | 6.875 (+12%) | 10.071 (+16%) | 2.676 (+4%) |
+
+First read (drop4): it frees 0.65 GiB, which is about 10k tokens of f16 KV by the §0j.10
+arithmetic, for +16% fineweb. **Unrepaired, it does not beat the KV-quant route**, which should free
+about 0.5 GiB at 16k ctx with no surgery (⚠ unverified on this model). The 27B is
+clearly more redundant per dropped layer than the 4B, though. 4B drop2 (6% of layers)
+unrepaired was +34% fineweb (13.95 vs 10.44); 27B drop4 (6%) is +16%. The repair question
+stays open until the larger drops land.
+
 ## 5. Milestones
 
 Tracked in [`TODO.md`](../TODO.md); summary:
