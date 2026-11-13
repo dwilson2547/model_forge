@@ -32,11 +32,14 @@ ap.add_argument("--min-gap", type=int, default=2)
 ap.add_argument("--windows", type=int, default=10)
 ap.add_argument("--max-tokens", type=int, default=2048)
 ap.add_argument("--threads", type=int, default=32)
+# fp32 by default: bf16 matmuls on the Altra (Neoverse N1, no bf16 units) hit the slow
+# path that M4 measured. A 27B in fp32 needs ~110 GB of RAM.
+ap.add_argument("--dtype", default="float32", choices=["float32", "bfloat16"])
 ap.add_argument("--out", default="ranking-v2.json")
 args = ap.parse_args()
 
 torch.set_num_threads(args.threads)
-model = AutoModelForCausalLM.from_pretrained(args.hf_dir)
+model = AutoModelForCausalLM.from_pretrained(args.hf_dir, dtype=getattr(torch, args.dtype))
 tok = AutoTokenizer.from_pretrained(args.hf_dir)
 parent, attr, layers = find_layer_stack(model)
 types = layer_types(text_config(model), len(layers))

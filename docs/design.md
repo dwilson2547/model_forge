@@ -1082,6 +1082,50 @@ torch 2.14.1+cu130 rather than the desktop's 2.15.0+cu132):
   three full-weight arms. On the 5080, the arms alone
   would be about 4.5 h, and full-weight's 40 GiB peak does not fit its 16 GB.
 
+### 0j.10 — 27B drop experiment: trade layers for context, against IQ3_M (planned 2026-11-13)
+
+**Goal (user, 2026-11-13):** the unsliced IQ3_M (11.9 GiB, §0j.4) already fits the
+5080 at about 16k ctx. The slice's job is no longer hitting a size: it is to **free
+memory for a longer context window while staying as close to IQ3_M's floor as
+possible**. Compare slice + IQ3_M against unsliced IQ3_M, on the floor and on the
+largest context that fits.
+
+Why not the old ≤ 12.5 GiB-at-Q4_K_M target (measured from the GGUFs 2026-11-13):
+UD-Q4_K_M is 15.3 GiB, with blocks at 0.214 GiB/layer on average (64 layers plus the
+MTP block `blk.64`) and 1.64 GiB of embeddings and output head. Reaching 12.5 GiB at Q4
+takes about 13 layers (20% of the stack), not the 4–8 in the §1 note. On the 4B,
+dropping 2 of 32 layers still left fineweb +8.8% over base after the best repair
+(11.36 vs 10.44, §0j.9), while IQ3_M costs the 27B +4.1% over Q8. A 20% cut is not
+expected to beat that; a light cut at IQ3 is the realistic shape.
+
+Memory arithmetic (IQ3_M, measured): a full-attention block is 0.155 GiB, a linear
+block 0.161 GiB, MTP 0.175 GiB. KV cache: 16 full-attention layers × K+V × 4 kv-heads ×
+256 dims × 2 bytes (f16) = **64 KiB/token**, so 1 GiB of KV is 16k tokens. Linear layers
+keep a fixed-size state that doesn't grow with context. Each dropped block frees
+≈ 0.16 GiB ≈ **2.5k tokens** of f16 context. A dropped full-attention block also cuts
+per-token KV by 1/16. Drop 6 ≈ +15k ctx; drop 8 ≈ +20k (arithmetic, not a
+measurement of what LM Studio actually fits).
+
+Competitors on the same axis, which must be measured alongside:
+- **KV-cache quantization** (q8_0 K/V in llama.cpp/LM Studio with flash attention)
+  halves KV per token with no surgery. If its floor cost is small, it beats a slice for
+  context and stacks with one. ⚠ unverified on this model.
+- **IQ3_XS** (~10.9 GiB, blocked on the `blk.64.attn_k` imatrix gap, §0j.4): about 1 GiB
+  freed by quantization alone.
+- **Dropping only the MTP block** if the runtime doesn't use it: 0.175 GiB with no effect
+  on the main path. ⚠ unverified whether LM Studio/llama.cpp loads or uses `blk.64`.
+
+Plan, cheapest first (steps 1–3 free on the Altra):
+1. Fixed layer scorer (§0j.1) on the HF 27B in fp32, picks for 4/6/8/13.
+2. Unrepaired drop-k at Q8_0 against the Q8 reference (5.89 / 8.36 / 2.50), to measure
+   the 27B's redundancy before any repair spend.
+3. Slice + IQ3_M (imatrix from the slice) unrepaired, against unsliced IQ3_M
+   (6.129 / 8.697 / 2.565).
+4. Only if 2–3 look within reach: QLoRA repair in the cloud (a 27B slice in full weights
+   doesn't fit 80 GB), with a bigger fresh corpus. `fw-000.parquet` (2.1 GB of
+   fineweb) on the desktop is the source.
+5. Max ctx that fits on the 5080 (LM Studio) for each finalist, plus the KV-quant arm.
+
 ## 5. Milestones
 
 Tracked in [`TODO.md`](../TODO.md); summary:
