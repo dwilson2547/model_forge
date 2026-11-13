@@ -9,12 +9,17 @@ Server PID is surfaced so the runner can read peak RSS from /proc.
 """
 
 import json
+import os
 import socket
 import subprocess
+import sys
 import time
 from pathlib import Path
 
 import urllib.request
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from surgery import paths  # noqa: E402
 
 
 class LlamaServer:
@@ -48,12 +53,15 @@ class LlamaServer:
         raise TimeoutError(f"llama-server not healthy after {timeout}s")
 
     def __enter__(self):
-        binpath = Path.home() / "llama.cpp" / "build" / "bin" / "llama-server"
+        # FORGE_LLAMA picks the build (paths.LLAMA); FORGE_NGL=99 offloads to a GPU, as in
+        # surgery/evaluate.py. A GPU board is its own surface: compare rows from one machine.
+        binpath = paths.LLAMA / "build" / "bin" / "llama-server"
+        ngl = os.environ.get("FORGE_NGL", "")
         self.proc = subprocess.Popen(
             [str(binpath), "-m", self.model,
              "--port", str(self.port), "-c", str(self.ctx),
              "-t", str(self.threads), "-tb", str(self.threads_batch),
-             "--metrics"],
+             "--metrics"] + (["-ngl", ngl] if ngl else []),
             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
         )
         self._wait_ready()
