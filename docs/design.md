@@ -1052,6 +1052,9 @@ torch 2.14.1+cu130 rather than the desktop's 2.15.0+cu132):
 - **Run 0b (trainer port):** the same 5,253 examples and 2,626 steps as Pass-1. Per-step
   losses are identical at steps 262/393/524/655. Final last-20 average 2.2316 vs the
   desktop's 2.2301. 3,184 tok/s overall (≈3,400 steady), about 1.6× the 5080's 1,953.
+  Floor (CUDA): f16 8.032 / 11.900 / 3.490 vs the desktop+Altra's 8.031 / 11.894 / 3.485,
+  and Q4_K_M 8.183 / 12.176 / 3.535 vs 8.207 / 12.166 / 3.537. **Parity passes**: every
+  f16 corpus is within 0.006, so cloud rows are directly comparable.
 
 ## 5. Milestones
 

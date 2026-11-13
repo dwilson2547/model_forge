@@ -22,7 +22,7 @@ plateau rerun on the 5080, 27B 3-bit do-nothing baseline on the Altra. Next: v4 
 - [x] User: first Brev instance (massedcompute A100 80GB, not stoppable, so a fresh
       instance each session).
 - [x] Run 0a: CUDA f16 floor matches the Altra within 0.003. Q4 reads about 0.04 lower.
-- [x] Run 0b: port parity (train loss 2.2316 vs 2.2301; floor pending). Was: §0j.7 arm, seed 1234, no `--val-frac`. Expect loss
+- [x] Run 0b: port parity PASSES (f16 8.032 / 11.900 / 3.490; train loss 2.2316 vs 2.2301). Was: §0j.7 arm, seed 1234, no `--val-frac`. Expect loss
       2.625→~2.230 and floors ≈ 8.031 / 11.894 / 3.485 after the 0a offset.
 - [ ] Run 1: full-weight repair, lr 1e-5 and 3e-6, same data and split as fresh1e
       (full file, 1 epoch, val-frac 0.01). Fineweb clearly below fresh1e ⇒ the wall was
