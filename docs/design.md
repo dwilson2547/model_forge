@@ -1226,6 +1226,41 @@ repair metric; wikitext and code PPL need a held-out source disjoint from the tr
 they rank repairs again. Distillation (train on the base's distribution instead of corpus text,
 the next experiment) is judged on fineweb KLD and top-1, not on PPL.
 
+### 0j.12 — Distillation repair: the slice learns the base, not the corpus (2026-11-13)
+
+**Why.** §0j.11 showed CE repair buys wikitext/code PPL by specializing on the diet. Training
+toward the base's next-token distribution instead can't specialize: the target is the model we
+cut. `recover_gpu.py --distill <base>`: loss = per-position KL(base ‖ slice) at T=1, the bf16 base
+frozen on the same GPU, KL in checkpointed 32-position chunks.
+
+**Setup.** fresh1e exactly (§0j.9: [25,29] slice, whole `mixed.train.txt`, 1 epoch, QLoRA r16
+all targets, lr 1e-4, seed 1234, 1% held out), except batch 2 x accum 2: batch 4 with the
+teacher resident peaked at 16.3 GiB and spilled to host memory (260 tok/s); 2x2 peaks at 13.0
+GiB, 1245 tok/s, 2.1 h. Held-out KL 0.323 → 0.127, still falling. Card:
+`cards/arms/qwen35-4b/2529-distill.md`.
+
+| f16 | wiki PPL / KLD / p99 | fineweb PPL / KLD / p99 / top-1 | code PPL / KLD / p99 |
+|---|---|---|---|
+| unrepaired [25,29] | 12.81 / 0.316 / 3.11 | 13.95 / 0.300 / 3.50 / 76.6% | 3.610 / 0.149 / 1.70 |
+| 2529-fresh1e (CE) | 7.78 / 0.561 / 6.52 | 11.55 / 0.223 / 2.40 / 80.3% | 3.185 / 0.212 / 2.39 |
+| full lr1e-6 (CE) | 7.69 / 0.535 / 6.08 | 11.38 / 0.212 / 2.41 / 81.4% | 3.181 / 0.184 / 2.03 |
+| **2529-distill (KL)** | 9.99 / **0.141** / **1.67** | 11.80 / **0.147** / **1.84** / **84.2%** | 3.280 / **0.067** / **0.80** |
+
+**Findings.**
+1. Same text, same steps, the objective alone: fineweb KLD 0.223 → 0.147 (-34%), top-1 agreement
+   80.3% → 84.2%. It beats the full-weight A100 arms from a 4-bit QLoRA on a desktop.
+2. Wikitext KLD 0.561 → 0.141 and code 0.212 → 0.067: the specialization §0j.11 found is gone.
+   Code KLD is below the unrepaired wound's (0.149), the first repair to manage that; every CE
+   repair made code drift further than the wound itself did.
+3. The tails shrink too (p99 down 2-4x vs fresh1e), so it isn't a mean bought with a few bad tokens.
+4. PPL now ranks it below fresh1e on every corpus. That is the §0j.11 lesson in one row: fresh1e's
+   lower PPL was diet-fitting, not closeness to the base.
+
+**Consequences.** Distillation is the repair objective from here, and the 27B drop6 repair should use
+it (teacher = the uncut 27B, which does not fit beside the student on the 5080: top-k teacher logits
+precomputed offline, or the cloud lane). Before it replaces fresh1e on the M5 shelf it needs the
+task/chat board: KLD says it is closer to the base, the board says whether that buys behaviour.
+
 ## 5. Milestones
 
 Tracked in [`TODO.md`](../TODO.md); summary:
