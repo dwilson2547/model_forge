@@ -1078,8 +1078,8 @@ torch 2.14.1+cu130 rather than the desktop's 2.15.0+cu132):
   Judge arms on the floor only. The lever that moved the floor this session was fresh
   tokens (fresh1e), not capacity. If full weights are needed later, start at lr 1e-6–3e-6.
   Models are in `~/forge-gpu/cloud-session1/` on the desktop.
-- Session cost: about $4–6 on-demand for parity plus three full-weight arms (the Brev
-  readout, measured by the user, was $2.68 partway through). On the 5080, the arms alone
+- Session cost: **$6.17** (Brev total, read by the user) for bootstrap, parity and
+  three full-weight arms. On the 5080, the arms alone
   would be about 4.5 h, and full-weight's 40 GiB peak does not fit its 16 GB.
 
 ## 5. Milestones
