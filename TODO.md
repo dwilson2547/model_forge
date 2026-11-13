@@ -31,7 +31,8 @@ plateau rerun on the 5080, 27B 3-bit do-nothing baseline on the Altra. Next: v4 
 - [ ] 27B drop-for-context experiment (design §0j.10): slice + IQ3_M vs unsliced IQ3_M,
       floor + max ctx on the 5080.
   - [x] HF Qwen3.8-27B at `~/m0/registry/Qwen3.8-27B` on the Altra (52 GB, 2026-11-13)
-  - [ ] Fixed scorer on the 27B (fp32, picks 4/6/8/13)
+  - [ ] Fixed scorer on the 27B (fp32, picks 4/6/8/13). 1-window timing done; the 10-window run plus
+        the IQ3_M/Q8_0 rows run overnight via `scripts/27b-drop-context.sh` (started 2026-11-13 01:25)
   - [ ] Unrepaired drop-k at Q8_0 vs the Q8 reference
   - [ ] Slice + IQ3_M unrepaired vs IQ3_M; KV-quant and IQ3_XS arms; MTP-block question
   - [ ] Cloud QLoRA repair only if the unrepaired rows are within reach

@@ -1126,6 +1126,23 @@ Plan, cheapest first (steps 1–3 free on the Altra):
    fineweb) on the desktop is the source.
 5. Max ctx that fits on the 5080 (LM Studio) for each finalist, plus the KV-quant arm.
 
+Tooling and timings (measured 2026-11-13, Altra):
+- **Scorer:** one window on the 27B in fp32 takes 14.6 min with 151 GB peak RSS (torch
+  reference GatedDeltaNet, no fla on aarch64). The 10-window run is about 2.3 h. One-window picks,
+  superseded by the 10-window ones: drop4 [1,4,9,12], drop8 [1,4,6,9,12,14,16,18].
+  Every pick is linear-attention and early. Full-attention blocks are protected as on the
+  4B, so these drops free weights but not KV.
+- **`surgery/gguf_drop.py`** slices the GGUF directly: it renumbers `blk.N`, sets
+  `block_count`, and writes `recurrent_layers`. On the 4B [25,29] drop it produced all 398
+  tensors byte-identical to the HF-route `unrep-2529-f16.gguf`, with equal metadata
+  (only `general.size_label` differs). It took 22 s, against a 27B HF load + save +
+  convert per slice.
+- **`surgery/imatrix_remap.py`** carries the §0j.4 BF16 imatrix (GGUF format despite the
+  `.dat` name) onto a slice by renumbering and dropping blocks. This is an approximation:
+  it's valid for unrepaired slices only.
+- **Driver:** `scripts/27b-drop-context.sh`. Labels are `27b-drop{k}-unrep-IQ3_M` and
+  `-Q8_0`. A 27B floor is about 70 min on the CPU.
+
 ## 5. Milestones
 
 Tracked in [`TODO.md`](../TODO.md); summary:
