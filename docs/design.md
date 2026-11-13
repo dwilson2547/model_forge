@@ -1018,11 +1018,40 @@ Free checks run before renting:
   | [25,29] Q4_K_M | 13.357 | 14.401 | 3.673 |
 
   Better repair, not a smaller wound (§0j.7 annotated).
-- **Fresh-data arm `drop2-repair-2529-fresh1e`** (desktop, in flight). The [25,29] slice,
-  QLoRA r16 @ 1e-4, all targets, seed 1234, the **full** 40.8M-char corpus (9.63M tokens,
-  3.1× the old per-epoch draw), 1 epoch, `--val-frac 0.01`. It answers whether the wall
-  is data starvation, and it is the like-for-like comparator for cloud Run 1 (same data
-  and split, LoRA → full weights).
+- **Fresh-data arm `drop2-repair-2529-fresh1e`** (desktop, 2026-11-12). The [25,29]
+  slice, QLoRA r16 @ 1e-4, all targets, seed 1234, the **full** 40.8M-char corpus
+  (9.53M tokens seen, 1.8× Pass-1's 2-epoch total, 18,806 examples of which 188 held
+  out), 1 epoch, `--val-frac 0.01`. 85 min on the 5080. Held-out loss went 2.528 → 2.087
+  and was still falling at the last eval (2.0871 → 2.0867), with no rise.
+
+  | [25,29] repaired | wikitext | fineweb | code |
+  |---|---:|---:|---:|
+  | Pass-1 f16 (12M × 2 ep, §0j.7) | 8.031 | 11.894 | 3.485 |
+  | **fresh1e f16** (40.8M × 1 ep) | **7.785** | **11.556** | **3.186** |
+  | Pass-1 Q4_K_M | 8.207 | 12.166 | 3.537 |
+  | **fresh1e Q4_K_M** | **7.923** | **11.816** | **3.227** |
+
+  **Fresh tokens move the floor**: −0.25 / −0.34 / −0.30 at f16, a similar shift at Q4.
+  Fineweb's −0.34 is just past the ±0.27 shuffle-noise band, and code moves −9%. The
+  §0j.3 "dose is dead" verdict was about repeated epochs. **Fresh data is a live lever**,
+  and the unflattened val curve says it isn't exhausted at 40.8M chars. Single seed;
+  fresh1e is the comparator for cloud Run 1.
+
+Cloud session 1 (Brev, massedcompute A100-SXM4-80GB, 2026-11-12; driver CUDA 13.0, so
+torch 2.14.1+cu130 rather than the desktop's 2.15.0+cu132):
+
+- Bootstrap needed two fixes on first contact (both committed). Ubuntu 22.04 ships
+  Python 3.10, and the pins need 3.13, so the venv now uses uv's CPython. The image had
+  gcc 12 with only g++ 11, so the script now installs the matching g++. It also installs
+  the CUDA toolkit when the image has only the driver.
+- **Run 0a (eval port):** the unrepaired [25,29] slice on CUDA llama.cpp `e95426f`,
+  `-ngl 99`. f16 12.826 / 13.953 / 3.613 vs the Altra's 12.823 / 13.954 / 3.610, so
+  identical within 0.003. Q4_K_M 13.305 / 14.364 / 3.669 vs 13.357 / 14.401 / 3.673:
+  CUDA scores about 0.04–0.05 lower on wiki/fineweb Q4 (quantized-kernel numerics).
+  Compare f16 rows across machines; offset Q4 rows.
+- **Run 0b (trainer port):** the same 5,253 examples and 2,626 steps as Pass-1. Per-step
+  losses are identical at steps 262/393/524/655. Final last-20 average 2.2316 vs the
+  desktop's 2.2301. 3,184 tok/s overall (≈3,400 steady), about 1.6× the 5080's 1,953.
 
 ## 5. Milestones
 

@@ -16,12 +16,13 @@ plateau rerun on the 5080, 27B 3-bit do-nothing baseline on the Altra. Next: v4 
       `--val-frac`/`--stop-on-val-rise`, exact `--resume`, `--push-repo`.
 - [x] Unrepaired [25,29] floor: 12.82 / 13.95 / 3.61. Better repair, not a smaller
       wound (§0j.9).
-- [ ] Fresh-data arm `drop2-repair-2529-fresh1e` (desktop, running 2026-11-12): floor it
-      on the Altra when it lands (f16 + Q4_K_M), and record it in §0j.9. Compare against
-      Pass-1 (8.031 / 11.894 / 3.485) and read the val curve.
-- [ ] User: spin up the first Brev H100 instance (account/SSH is user-side).
-- [ ] Run 0a: CUDA floor of the unrepaired slice vs the Altra row above (eval offset).
-- [ ] Run 0b: port parity. §0j.7 arm, seed 1234, no `--val-frac`. Expect loss
+- [x] Fresh-data arm `drop2-repair-2529-fresh1e`: 7.785 / 11.556 / 3.186 f16 (Pass-1
+      8.031 / 11.894 / 3.485). Fresh data is a live lever, and the val curve hadn't
+      flattened (§0j.9).
+- [x] User: first Brev instance (massedcompute A100 80GB, not stoppable, so a fresh
+      instance each session).
+- [x] Run 0a: CUDA f16 floor matches the Altra within 0.003. Q4 reads about 0.04 lower.
+- [x] Run 0b: port parity (train loss 2.2316 vs 2.2301; floor pending). Was: §0j.7 arm, seed 1234, no `--val-frac`. Expect loss
       2.625→~2.230 and floors ≈ 8.031 / 11.894 / 3.485 after the 0a offset.
 - [ ] Run 1: full-weight repair, lr 1e-5 and 3e-6, same data and split as fresh1e
       (full file, 1 epoch, val-frac 0.01). Fineweb clearly below fresh1e ⇒ the wall was
