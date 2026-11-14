@@ -171,10 +171,12 @@ Fixes + fired experiments recorded in design §0j.
 
 ## Repair at the cut (design §0j.15, tooling landed 2026-11-14)
 
-- [ ] Damage scans on the Altra (`surgery/damage_scan.py`, `~/forge/runs/damage-scan/*.log`,
-      ledger `results/damage.jsonl`): 4B f16 greedy 4, 27B Q8_0 greedy 6. Read: do the measured
-      picks beat [25,29] / the cosine 27B picks unrepaired, and are full-attention blocks
-      really the expensive ones?
+- [x] 4B damage scan (2026-11-14, §0j.15): cheap layers are 12–17; [12,16] costs 0.086 KLD vs
+      0.233 for [25,29]; drop-4 [12,13,15,16] costs 0.198; full-attention 15 and 11 are cheap
+- [ ] Board v2 on unrepaired [12,16] and [12,13,15,16] (`scripts/qwen35-4b/board-scan.sh`,
+      queued on the 5080). If [12,16] beats unrep-2529, move the repair arms to it
+- [ ] 27B damage scan on the Altra (`~/forge/runs/damage-scan/scan-27b.log`, Q8_0, greedy 6):
+      do the measured picks beat the cosine 27B picks unrepaired?
 - [ ] `STAGE=prep bash scripts/qwen35-4b/repair-local.sh` on the 5080: bridge, its KLD floor,
       chat KLD rows for cut / bridge / 2529-distill, hidden-loss trainer calibration
 - [ ] `STAGE=hid` arm (and `ARM=bridge-hid`): does the hidden-state term beat logit KL alone

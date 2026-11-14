@@ -1,0 +1,14 @@
+# Measured-damage pick (design 0j.15): surgery/damage_scan.py greedy set, chosen by KLD against
+# the uncut model rather than by the cosine scorer. No type protection and no minimum gap: the
+# scan measures the set as a whole, so those rules are not needed to keep it safe.
+name: qwen35-4b-drop4-scan-12131516
+base_dir: ${FORGE_ROOT}/base/Qwen/Qwen3.5-4B
+out_dir: ${FORGE_ROOT}/runs/qwen35-4b/slice/drop4-scan-12131516
+llamacpp_dir: /home/daniel/llama.cpp
+ops:
+  - op: drop_layers
+    count: 4
+    strategy: explicit
+    indices: [12, 13, 15, 16]
+    min_gap: 1
+    protected_types: []

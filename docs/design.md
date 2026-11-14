@@ -1354,7 +1354,7 @@ by a Q4 copy of the base on a shared job queue (`docs/datasets.md`); training sc
 the bf16 base on those answers. Train at a context that covers the needle range, or re-check
 needle afterwards.
 
-### 0j.15 — Repair at the cut: measured-damage picks, a linear bridge, hidden-state targets (2026-11-14, tooling; results pending)
+### 0j.15 — Repair at the cut: measured-damage picks, a linear bridge, hidden-state targets (2026-11-14; 4B scan in, the rest pending)
 
 External review (Claude, 2026-11-14) of §0f–§0j.13. Every repair arm so far changed how hard
 the slice trains (rank, lr, dose, diet, mixers, full weights) and scored the result at the final
@@ -1377,9 +1377,46 @@ agreement on held-out answers is the metric that can rank them.
 isn't additive (the 27B's drop6 → drop8 cliff, §0j.10). Reasons to distrust the cosine scorer:
 its 4B pick [25,29] is a worse unrepaired wound than [24,28] (§0j.9), and its 27B picks are all
 early layers. Full-attention blocks are candidates too: their protection (§0a) was never
-measured. Running on the Altra since 2026-11-14 13:40: the 4B at f16 (4 rounds) and the 27B at
-Q8_0 (6 rounds, later rounds over the 16 cheapest single drops); fineweb + code, 8 chunks;
-ledger `results/damage.jsonl`.
+measured. Both scans run on the Altra (CPU): fineweb + code, 8 chunks of 512 tokens; ledger
+`results/damage.jsonl`.
+
+**4B scan result (2026-11-14, f16, all 32 blocks, 4 greedy rounds, later rounds over the 12
+cheapest single drops).** KLD is the mean of the fineweb and code means.
+
+| Set | KLD | fineweb / code | top-1 fineweb / code |
+|---|---:|---:|---:|
+| [25,29] (the current slice), same yardstick | 0.2326 | | |
+| [24,28], same yardstick | 0.2407 | | |
+| [16] | 0.0393 | 0.037 / 0.041 | 90.9% / 94.7% |
+| [12,16] | 0.0858 | | |
+| [12,13,16] | 0.1366 | | |
+| [12,13,15,16] | 0.1980 | 0.181 / 0.215 | 79.7% / 86.0% |
+
+- **The cheap layers are 12–17, not 24–29.** Single drops, cheapest first: 16, 12, 13, 17
+  (0.039–0.046), then 15, 8, 9, 11 (0.057–0.064). The cosine picks rank 10th (layer 25, 0.091)
+  and 20th (layer 29, 0.121) of 32.
+- **The measured drop-2 costs 37% of the cosine drop-2** (0.086 vs 0.233), and the measured
+  drop-4 costs less than the cosine drop-2 (0.198 vs 0.233). For scale, 2529-distill, the best
+  repair of [25,29], scores 0.147 / 0.067 on the 24-chunk GPU yardstick (`results/kld.jsonl`,
+  mean 0.107; unrep-2529 reads 0.224 there and 0.233 here, so the two yardsticks are close but
+  not identical). Unrepaired [12,16] is at or below the repaired [25,29] on raw-text KLD.
+- **Full-attention blocks are not uniformly expensive.** Layers 15 and 11 are among the 8
+  cheapest and layer 15 is in the greedy drop-4. Layers 3, 19 and 27 are expensive (0.15–0.17),
+  and 31 (the last block) is 1.21. The blanket protection (§0a) cost choices; it wasn't needed
+  for safety.
+- **Edges:** layer 0 is 8.80 (model destroyed), 31 is 1.21, 30 and 6 are 0.275, 1 and 2 are
+  ~0.2.
+- **Damage is mildly super-additive in this range.** The singles for [12,13,15,16] sum to
+  0.179 and the set measures 0.198; [25,29]'s singles sum to 0.212 and the pair measures 0.233.
+- **What this does not show:** raw-text KLD is not the board. Board v2 on unrepaired [12,16]
+  and [12,13,15,16] is queued on the 5080 (`scripts/qwen35-4b/board-scan.sh`, recipes
+  `qwen35-4b-drop{2,4}-scan-*.yaml`); until it lands, "the scan picks are better slices" is
+  ⚠ unverified on tasks. If it holds, every repair arm below should start from [12,16], and
+  the repair scripts' `--dropped 25 29` / layers 24–28 change with it.
+
+The 27B scan (Q8_0, 6 rounds, later rounds over the 16 cheapest single drops) restarted
+2026-11-14 18:40 after a killed run left a truncated reference file (references are now
+written to a `.part` and renamed); results pending.
 
 **2. A linear bridge, no training** (`surgery/bridge.py`). Fit, by least squares on
 calibration text, the linear map that best stands in for each dropped layer, folded into the

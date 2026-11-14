@@ -91,8 +91,10 @@ def scan(label, model, corpora, chunks, greedy, candidates, start, tmp, only=Non
         refs[c] = tmp / f"ref-{c}-{chunks}.kld"
         if not refs[c].exists():
             t0 = time.time()
+            part = refs[c].with_suffix(".part")  # a killed run must not leave a short ref behind
             text = _perplexity(["-m", str(model), "-f", multicorpus.CORPORA[c],
-                                "--kl-divergence-base", str(refs[c])], chunks)
+                                "--kl-divergence-base", str(part)], chunks)
+            part.rename(refs[c])
             print(f"[scan] ref {c}: PPL {_num(text, r'Final estimate: PPL = ([0-9.]+)'):.4f} "
                   f"({time.time() - t0:.0f}s, {refs[c].stat().st_size / 2**30:.1f} GiB)", flush=True)
     done = load_done()
