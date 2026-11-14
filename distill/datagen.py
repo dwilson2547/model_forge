@@ -2,6 +2,7 @@
 
   python -m distill.datagen <label> <teacher.gguf> [--mix default] [--slots 4]
                             [--temp 0.6] [--top-p 0.95] [--top-k 20] [--think]
+  python -m distill.datagen export <label> [--mix default] [--partial] [--only-correct]
 
 <teacher> is a GGUF path (a local llama-server), or queue:<model> to send the prompts to an HTTP
 GPU job queue as background jobs (distill/queue.py; FORGE_QUEUE_URL, FORGE_QUEUE_TOKEN).
@@ -89,7 +90,19 @@ def run(label, teacher, mix="default", slots=4, slot_ctx=16384, temp=0.6, top_p=
                     dt = time.time() - t0
                     print(f"  {n}/{len(todo)}  {dt:.0f}s  {toks / dt:.0f} tok/s", flush=True)
 
-    out_p = prompts.DIR / f"{label}.{mix}.jsonl"
+    return export(label, mix, only_correct)
+
+
+def export(label, mix="default", only_correct=False, partial=False):
+    """Write $FORGE_DATA/distill/<label>.<mix>.jsonl from the raw cache. partial: a run still
+    answering; prompts without an answer yet are skipped and the file is
+    <label>.<mix>.partial.jsonl, so it is never mistaken for the finished dataset."""
+    todo_all = [json.loads(l) for l in open(prompts.DIR / f"{mix}.prompts.jsonl")]
+    raw_p = prompts.DIR / "raw" / f"{label}.{mix}.jsonl"
+    done = {r["id"]: r for r in map(json.loads, open(raw_p))}
+    if partial:
+        todo_all = [it for it in todo_all if it["id"] in done]
+    out_p = prompts.DIR / f"{label}.{mix}{'.partial' if partial else ''}.jsonl"
     kept, why = 0, {}
     with open(out_p, "w") as f:
         for it in todo_all:
@@ -115,6 +128,10 @@ def run(label, teacher, mix="default", slots=4, slot_ctx=16384, temp=0.6, top_p=
 
 def main():
     a = sys.argv[1:]
+    if a[:1] == ["export"] and len(a) >= 2:
+        rest = [x for x in a[2:] if x not in ("--only-correct", "--partial")]
+        opts = dict(zip(rest[::2], rest[1::2]))
+        return export(a[1], opts.get("--mix", "default"), "--only-correct" in a, "--partial" in a)
     flags = {"--only-correct", "--think"} & set(a)
     a = [x for x in a if x not in flags]
     if len(a) < 2:

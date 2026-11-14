@@ -105,3 +105,59 @@ The build dropped:
 At the estimated ~1,000 prompts an hour above, `wide` is about 41 hours of a 3080 ⚠ unverified
 (an estimate, not a run). That's why it goes through the job queue path: `distill.datagen <label>
 queue:<model> --mix wide`. Copy `wide.prompts.jsonl` to the machine that runs it.
+
+## Curating a dataset: spread and need
+
+`distill/curate.py` picks which teacher answers to train on. It doesn't rely on reading samples
+by hand. It uses two signals, both cached per record under `$FORGE_DATA/distill/curate/`, so a
+grown dataset only embeds and scores what's new:
+
+```
+python -m distill.datagen export qwen35-4b-q4 --mix wide --partial   # a run still answering
+D=~/forge/data/distill/qwen35-4b-q4.wide.partial.jsonl
+S=~/forge/runs/qwen35-4b/slice/drop2-explicit-2529/hf-edited
+python -m distill.curate embed $D
+python -m distill.curate score $D --student $S
+python -m distill.curate report $D --student $S --k 256
+python -m distill.curate pick $D --student $S --n 5000 --how random|balanced|need
+```
+
+- **Spread: prompt embeddings.** Prompts only, through Qwen3-Embedding-0.6B (Apache-2.0,
+  revision 97b0c614be4d). Each prompt is cut to its first 1024 tokens, keeping the EOS the
+  pooling reads. An answer's embedding mostly repeats its prompt's topic. What matters about an
+  answer (is it right, did it finish) isn't in its embedding.
+  - **Near-duplicates.** A record whose prompt has cosine > 0.95 with an earlier one is
+    dropped. Checked by eye on the first 6,590 `wide` answers (2026-11-14):
+    - 0.95 and up: real near-copies, such as the same story prompt with a different tail, or
+      a Magicoder prompt reworded word for word.
+    - 0.92–0.95: the same template with different content (SciRIFF citation tasks), which
+      should stay.
+    - At 0.95, 109 of the 6,590 records go, 69 of them WildChat.
+  - **Clusters.** Spherical k-means on the remaining prompts, fixed seed.
+- **Need: divergence from the base.** For each answer, the mean per-token KL(base ‖ student)
+  over the answer positions. This is the quantity `--distill` trains on, computed the same way:
+  the same chat-template rendering, the base in bf16 and the student in nf4 (10.6 GiB together
+  on the 5080). The file also records each model's mean NLL of the answer.
+  - High KL means the cut broke something on this kind of text.
+  - KL near zero means the student already matches the base, so the record teaches little.
+  - `nll_base` on Q4-teacher text is also a direct read of the Q4-vs-f16 drift: how surprised
+    the f16 base is by its Q4 build's answers.
+  - Speed: about 0.6 records/s on the 5080 on the longest-first slice. Neither
+    `flash-linear-attention` nor `causal-conv1d` is installed, so Qwen3.5's linear-attention
+    layers run on the PyTorch fallback, as they do in training.
+- **`pick`.** Near-duplicates are dropped first in every strategy. Then:
+  - `random`: the baseline.
+  - `balanced`: round-robin over clusters.
+  - `need`: the `--floor` highest-KL records of every cluster, then the rest by KL. This
+    targets the damage without collapsing onto one topic.
+
+Selection uses only the training pool. Steering it toward board v2 prompts would be training on
+the test by another route.
+
+**Caveat on partial sets.** `datagen` answers the longest prompts first, so the first ~6.6k
+`wide` answers are mostly long chat, long-context, code and WildChat prompts. Only 1 is GSM8K
+maths and 38 are NuminaMath. Statistics from a partial export describe that slice, not the mix.
+
+Whether selection helps at all is still to be measured. The plan: train on N records chosen
+`random`, `balanced` and `need`, then compare the three on board v2. At 41k answers the answer
+may be to train on everything, and use selection only for dedup.

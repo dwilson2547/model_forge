@@ -23,6 +23,8 @@ triage-SFT arc landed v3 (`qwen35-4b-drop2-sftv3-triage`). Measured story so far
 - `TODO.md` — milestones, review follow-ups, the v4 SFT diet plan
 - `surgery/` — ranking, ops, recipes, GPU QLoRA recovery, triage-corpus extraction
 - `bench/` — serve harness + task board (chat-mode grading)
+- `distill/` — teacher datasets: prompt mixes, teacher answers (local llama-server or a GPU job queue),
+  curation (dedup, clusters, divergence-ranked selection); `docs/datasets.md`
 - `recipes/`, `cards/` — provenance per candidate / keeper
 - `scripts/<family>/` — experiment drivers; `scripts/legacy/` — the old loose box scripts, as a record
 - `publish/` — HF publish scripts

@@ -149,6 +149,11 @@ Fixes + fired experiments recorded in design §0j.
 - [ ] Chat-distill [25,29] on the `wide` answers (41k, being generated on the shared queue,
       `docs/datasets.md`); train ctx long enough for the needle range, then board v2
 - [ ] Check Q4-vs-f16 teacher drift on a few hundred `wide` prompts before trusting the Q4 text
+- [ ] Data selection (`distill/curate.py`, docs/datasets.md "Curating"): embed + score the full `wide`
+      answers against the [25,29] slice, then a fixed-budget comparison (random / balanced / need,
+      same N) on board v2. `nll_base` from the scores answers part of the drift check above
+- [ ] Gemma 4 26B A4B teacher on a `wide` subset on the Mac (`prompts subset`); pilot (`gpilot`,
+      140 prompts, thinking off vs on) running 2026-11-14 decides thinking
 - [x] KLD row in the floor (llama-perplexity --kl-divergence-base on base, --kl-divergence
       on candidates): distance-from-base that domain adaptation can't game
 - [ ] Incident-triage benchmark task (proof-of-concept 2026-11-08, LM Studio): candidate models

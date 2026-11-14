@@ -6,6 +6,9 @@
                                                        # -> $FORGE_DATA/distill/<label>.<mix>.jsonl
   python -m distill.datagen <label> queue:<model> ...  # same, as background jobs on an HTTP GPU
                                                        # job queue (distill/queue.py)
+  python -m distill.datagen export <label> [--mix m] [--partial]   # dataset from the raw cache
+  python -m distill.prompts subset <src> <name> <n> [kind=n ...]   # a slice of a built mix
+  python -m distill.curate embed|score|report|pick <dataset> ...   # dedup, clusters, divergence
   surgery/recover_gpu.py <student hf> --sft-dataset <that jsonl> --distill <teacher hf> ...
 
 The prompt mix is model-agnostic and fixed by its seed, so every teacher (Qwen, Gemma, ...)
