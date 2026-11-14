@@ -1,0 +1,364 @@
+{
+ "tulu3": {
+  "rows": 939343,
+  "unique_first_prompt": 817762,
+  "first_prompt_chars_p50": 383,
+  "first_prompt_chars_p90": 1452,
+  "over_6000_chars": 13312,
+  "multi_turn": 43253,
+  "board_overlap": 165,
+  "mostly_ascii": 849290,
+  "sources": [
+   [
+    "ai2-adapt-dev/personahub_math_v5_regen_149960",
+    149960
+   ],
+   [
+    "ai2-adapt-dev/evol_codealpaca_heval_decontaminated",
+    107276
+   ],
+   [
+    "ai2-adapt-dev/tulu_v3.9_wildchat_100k",
+    100000
+   ],
+   [
+    "ai2-adapt-dev/tulu_v3.9_aya_100k",
+    100000
+   ],
+   [
+    "ai2-adapt-dev/flan_v2_converted",
+    89982
+   ],
+   [
+    "ai2-adapt-dev/numinamath_tir_math_decontaminated",
+    64312
+   ],
+   [
+    "ai2-adapt-dev/tulu_v3.9_open_math_2_gsm8k_50k",
+    50000
+   ],
+   [
+    "ai2-adapt-dev/tulu_v3.9_wildjailbreak_decontaminated_50k",
+    50000
+   ],
+   [
+    "ai2-adapt-dev/tulu_v3.9_synthetic_finalresp_wildguardmixtrain_decontaminated_50k",
+    50000
+   ],
+   [
+    "allenai/tulu-3-sft-personas-math-grade",
+    49980
+   ],
+   [
+    "ai2-adapt-dev/personahub_code_v2_34999",
+    34999
+   ],
+   [
+    "ai2-adapt-dev/personahub_ifdata_manual_seed_v3_29980",
+    29980
+   ]
+  ],
+  "samples": [
+   "Create a snippet of Terraform HCL code that create an AWS autoscaling group, and an ALB in front to expose an application to internet.",
+   "As a PhD candidate in biomedical research, you are investigating the growth dynamics of a particular strain of bacteria under specific experimental conditions. The growth rate of the bacteria is model",
+   "Marky owns a computer accessory shop. For this month, half of their sales are wireless mice, one-fourth are optical mice, and the rest are trackball mice. If Marky's shop was able to sell a total of 8",
+   "Please write a tutorial for me on how to create a PowerPoint presentation for my science project. Make sure to include tips on how to add images and videos. End the tutorial with a section titled \"FIN"
+  ]
+ },
+ "ultrachat": {
+  "rows": 207865,
+  "unique_first_prompt": 203870,
+  "first_prompt_chars_p50": 483,
+  "first_prompt_chars_p90": 2372,
+  "over_6000_chars": 969,
+  "multi_turn": 207854,
+  "board_overlap": 0,
+  "mostly_ascii": 207801,
+  "sources": [
+   [
+    "?",
+    207865
+   ]
+  ],
+  "samples": [
+   "These instructions apply to section-based themes (Responsive 6.0+, Retina 4.0+, Parallax 3.0+ Turbo 2.0+, Mobilia 5.0+). What theme version am I using?\nOn your Collections pages & Featured Collections",
+   "Provide a step-by-step guide on how to construct a well-balanced meal plan including recommended daily calorie intake, serving sizes of major food groups, and meal timing. Additionally, include tips o",
+   "Create a comprehensive social media strategy for your upcoming product launch, taking into consideration the appropriate platforms, target audience, methods for creating buzz, content creation, budget",
+   "Investigate the leading theories regarding the formation of black holes in outer space."
+  ]
+ },
+ "openhermes": {
+  "rows": 1001551,
+  "unique_first_prompt": 897132,
+  "first_prompt_chars_p50": 244,
+  "first_prompt_chars_p90": 1486,
+  "over_6000_chars": 5487,
+  "multi_turn": 2689,
+  "board_overlap": 19,
+  "mostly_ascii": 992561,
+  "sources": [
+   [
+    "?",
+    496743
+   ],
+   [
+    "glaive-code-assist",
+    182240
+   ],
+   [
+    "CamelAI",
+    78390
+   ],
+   [
+    "metamath",
+    56448
+   ],
+   [
+    "EvolInstruct_70k",
+    51948
+   ],
+   [
+    "cot_alpaca_gpt4",
+    42026
+   ],
+   [
+    "airoboros2.2",
+    35380
+   ],
+   [
+    "platypus",
+    22280
+   ],
+   [
+    "GPT-4 Comparison Data",
+    14928
+   ],
+   [
+    "UnnaturalInstructions",
+    8610
+   ],
+   [
+    "CogStackMed",
+    4443
+   ],
+   [
+    "LMSys Chatbot Arena",
+    3136
+   ]
+  ],
+  "samples": [
+   "Every day, a tree drops 7 leaves. How many leaves would it drop in a month of February in a non-leap year? Include your logic.",
+   "Can you provide a code example in C that encrypts a text string?",
+   "If Kelly puts string cheeses in her kids' lunches 5 days per week, with her oldest wanting 2 every day and her youngest eating only 1, and the packages come with 30 string cheeses per pack, how many p",
+   "Read the following article and select the best answer. Article: Founded in 1764 by French traders, St. Louis today is the fifteenth largest urban area in the United States. There are many attractive d"
+  ]
+ },
+ "numina": {
+  "rows": 859494,
+  "unique_first_prompt": 807452,
+  "first_prompt_chars_p50": 213,
+  "first_prompt_chars_p90": 445,
+  "over_6000_chars": 1,
+  "multi_turn": 0,
+  "board_overlap": 5,
+  "mostly_ascii": 858581,
+  "sources": [
+   [
+    "cn_k12",
+    276554
+   ],
+   [
+    "synthetic_math",
+    167874
+   ],
+   [
+    "orca_math",
+    153314
+   ],
+   [
+    "olympiads",
+    150563
+   ],
+   [
+    "synthetic_amc",
+    62108
+   ],
+   [
+    "aops_forum",
+    30192
+   ],
+   [
+    "math",
+    7477
+   ],
+   [
+    "gsm8k",
+    7342
+   ],
+   [
+    "amc_aime",
+    4070
+   ]
+  ],
+  "samples": [
+   "Consider the terms of an arithmetic sequence: $-\\frac{1}{3}, y+2, 4y, \\ldots$. Solve for $y$.",
+   "Ellipse \\(\\Gamma: x^{2}+\\frac{y^{2}}{4}=1\\) (\\(0 \\leq x \\leq 1, 0 \\leq y \\leq 2\\)) in the first quadrant has an arc represented by \\(\\overparen{A B}\\). Point \\(P(x, y)\\) lies on arc \\(\\overparen{A B}\\",
+   "A triangular array consists of 3003 coins with the first row containing 1 coin, the second row containing 2 coins, and so on, increasing by one coin per row up to the $N^{th}$ row. Find the sum of the",
+   "Two circles  $C_{1}$  and  $C_{2}$  are (externally or internally) tangent at a point  $P$ . The straight line  $D$  is tangent at  $A$  to one of the circles and cuts the other circle at the points  "
+  ]
+ },
+ "magpie": {
+  "rows": 300000,
+  "unique_first_prompt": 300000,
+  "first_prompt_chars_p50": 72,
+  "first_prompt_chars_p90": 129,
+  "over_6000_chars": 0,
+  "multi_turn": 0,
+  "board_overlap": 0,
+  "mostly_ascii": 299932,
+  "sources": [
+   [
+    "?",
+    300000
+   ]
+  ],
+  "samples": [
+   "Can you explain the concept of equitable distribution in family law?",
+   "Write a code using Jupyter Notebook. This code will pull all latest images from specific channel in Discord.",
+   "Explain the difference between cruiser vs sport bike.",
+   "Generate a physique prediction model using a decision tree classifier."
+  ]
+ },
+ "magicoder": {
+  "rows": 111183,
+  "unique_first_prompt": 108837,
+  "first_prompt_chars_p50": 397,
+  "first_prompt_chars_p90": 1245,
+  "over_6000_chars": 616,
+  "multi_turn": 0,
+  "board_overlap": 812,
+  "mostly_ascii": 110928,
+  "sources": [
+   [
+    "evol",
+    111183
+   ]
+  ],
+  "samples": [
+   "Please amend the subsequent Python script so that it includes a 'while' loop rather than the existing 'for' loop, which iterates through the items of an integer list.\n\nThe script currently has a bug w",
+   "Complete the following code:\nimport java.util.*;\nimport java.lang.*;\n\nclass Solution {\n    /**\n    parentheses is a string of \"(\" and \")\".\n    return True if every opening parenthesis has a matching c",
+   "Create a Kubernetes deployment for an application.",
+   "Generate a working C program to accept a sentence as an input and count the occurrences of each letter in the sentence. Additionally, the program must also ignore case, count non-alphanumeric characte"
+  ]
+ },
+ "infinity-7M_core": {
+  "rows": 200000,
+  "unique_first_prompt": 174284,
+  "first_prompt_chars_p50": 230,
+  "first_prompt_chars_p90": 909,
+  "over_6000_chars": 415,
+  "multi_turn": 15825,
+  "board_overlap": 59,
+  "mostly_ascii": 188004,
+  "sources": [
+   [
+    "MetaMath",
+    36362
+   ],
+   [
+    "Subjective",
+    32652
+   ],
+   [
+    "flan",
+    30271
+   ],
+   [
+    "Orca-math-word-problems-200k",
+    26554
+   ],
+   [
+    "OpenHermes-2.5",
+    25749
+   ],
+   [
+    "code_exercises",
+    13314
+   ],
+   [
+    "MathInstruct",
+    10338
+   ],
+   [
+    "code_bagel",
+    9241
+   ],
+   [
+    "CodeFeedback",
+    5807
+   ],
+   [
+    "Evol-Instruct-Code-80K",
+    3515
+   ],
+   [
+    "CodeExercise-Python-27k",
+    2134
+   ],
+   [
+    "self-oss-instruct-sc2-exec-filter-50k",
+    1259
+   ]
+  ],
+  "samples": [
+   "I need to create a program that stops a specific service called \"SageTV\" on a Windows operating system. I want to do this programmatically using a command-line interface or a script. How can I achieve",
+   "Generate a SQL query to count the number of books in the library grouped by their authors",
+   "What types of medication are typically prescribed for Parkinson's treatment?",
+   "Scour through the vast online realm to retrieve web pages that have a precise match to a particular query in their title. Only web pages with the exact wording in their titles will be considered, with"
+  ]
+ },
+ "infinity-Gen": {
+  "rows": 200000,
+  "unique_first_prompt": 197224,
+  "first_prompt_chars_p50": 234,
+  "first_prompt_chars_p90": 1729,
+  "over_6000_chars": 1917,
+  "multi_turn": 4589,
+  "board_overlap": 5,
+  "mostly_ascii": 155612,
+  "sources": [
+   [
+    "Subjective",
+    200000
+   ]
+  ],
+  "samples": [
+   "A dataset contains the ages of participants in a study, as follows: [30, 50, -10, 60, 25, 80, -5]. Remove any invalid ages (e.g., negative ages). Using the valid entries, perform a min-max normalizati",
+   "\u5206\u6790\u8fd9\u4e24\u4e2a\u4eba\u7684\u7279\u70b9\uff0c\u5e76\u7ed3\u5408\u4ed6\u4eec\u7684\u5174\u8da3\u548c\u751f\u6d3b\u4e60\u60ef\uff0c\u5224\u65ad\u4ed6\u4eec\u662f\u5426\u9002\u5408\u5728\u4e00\u8d77\u3002\n\u201c\u4ed6\u559c\u6b22\u65c5\u884c\u5e76\u5c1d\u8bd5\u65b0\u9c9c\u4e8b\u7269\uff0c\u5979\u5219\u66f4\u503e\u5411\u4e8e\u5728\u5bb6\u8bfb\u4e66\u548c\u4eab\u53d7\u72ec\u5904\u65f6\u5149\u3002\u201d",
+   "Construct an entirely new backstory for Professor X from Marvel Comics, ensuring to incorporate key years like birth and death years, and description of pivotal life events that lead him to his role.",
+   "\"Visualize a black female from an African desert village with a regal appearance. She has intensely bright yellow hair, woven into complex, multi-layered braids that cascade like a golden waterfall, a"
+  ]
+ },
+ "infinity-0625": {
+  "rows": 200000,
+  "unique_first_prompt": 198728,
+  "first_prompt_chars_p50": 292,
+  "first_prompt_chars_p90": 1240,
+  "over_6000_chars": 338,
+  "multi_turn": 7640,
+  "board_overlap": 9,
+  "mostly_ascii": 196318,
+  "sources": [
+   [
+    "Subjective",
+    200000
+   ]
+  ],
+  "samples": [
+   "In a certain country populated predominantly by wizards, there is an impending demonstration that needs careful planning to ensure it meets specific requirements.\n\nThere is a population of n individua",
+   "Analyze the influence of the Peace of Westphalia in 1648 on the development of modern international relations.",
+   "Produce an instructional video guide showcasing a comprehensive full-body strength and conditioning regimen, incorporating dynamic warm-up sequences and cooldown stretches. Highlight detailed form and",
+   "Design and develop a comprehensive website for a newly launched organic food delivery service that exudes a vibrant, fresh-from-the-farm aesthetic and integrates extensive resources for holistic healt"
+  ]
+ }
+}
