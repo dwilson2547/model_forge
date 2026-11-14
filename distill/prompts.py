@@ -24,6 +24,13 @@ built there:
              training distribution)                                          (ODC-BY)
 
 A mix is {kind: count}; the seed fixes which rows are drawn, so a mix name is a dataset.
+
+  python -m distill.prompts build --mix <mix>
+  python -m distill.prompts subset <src> <name> <n> [kind=n ...]
+
+`subset` takes the first n prompts of each kind of an already built mix (kind=n overrides
+one kind, kind=0 drops it), so a pilot or a slower teacher answers the same prompts as the
+mix it came from, without the pools.
 """
 import glob
 import json
@@ -296,12 +303,27 @@ def build(mix="default"):
     return p
 
 
+def subset(src, name, n, overrides=()):
+    """Write <name>.prompts.jsonl: the first n prompts of each kind of <src>.prompts.jsonl."""
+    want = {k: int(v) for k, v in (o.split("=") for o in overrides)}
+    taken, out = {}, []
+    for line in open(DIR / f"{src}.prompts.jsonl"):
+        kind = json.loads(line)["kind"]
+        if taken.get(kind, 0) < want.get(kind, n):
+            taken[kind] = taken.get(kind, 0) + 1
+            out.append(line)
+    (DIR / f"{name}.prompts.jsonl").write_text("".join(out))
+    print(f"{name}: {len(out)} prompts from {src} {dict(sorted(taken.items()))}")
+
+
 if __name__ == "__main__":
     a = sys.argv[1:]
     if a == ["fetch"]:
         fetch()
     elif a[:1] == ["build"]:
         build(a[2] if a[1:2] == ["--mix"] else "default")
+    elif a[:1] == ["subset"] and len(a) >= 4:
+        subset(a[1], a[2], int(a[3]), a[4:])
     elif a[:1] == ["grams"] and len(a) == 2:
         json.dump(sorted(board_grams()), open(a[1], "w"))
     else:
