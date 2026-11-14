@@ -161,3 +161,27 @@ maths and 38 are NuminaMath. Statistics from a partial export describe that slic
 Whether selection helps at all is still to be measured. The plan: train on N records chosen
 `random`, `balanced` and `need`, then compare the three on board v2. At 41k answers the answer
 may be to train on everything, and use selection only for dedup.
+
+## Gemma 4 26B A4B teacher: thinking off vs on (pilot, 2026-11-14)
+
+`gpilot` is `wide` cut to 10 prompts per kind with 40 maths (`prompts subset wide gpilot 10
+math=40`), 140 prompts in all. It was answered by Gemma 4 26B A4B (QAT build) through the job
+queue, at greedy decoding with a 4096 cap, once with thinking off and once with it on:
+
+| | Thinking off | Thinking on |
+|---|---:|---:|
+| Wall time, 140 prompts | 42 min | 125 min |
+| Output length, median / mean | 249 / 430 | 1022 / 1360 |
+| Hit the cap (dropped) | 1 | 11, all with no answer written |
+| Gold-checked correct (40 GSM8K + 10 needle) | 43/50 | 44/50 (2 of the misses are cut-off answers) |
+
+- Thinking costs about 3× the time for one more gold answer out of 50.
+- The capped answers spent the whole cap thinking. Four of them are NuminaMath, so a
+  thinking-on run needs a larger cap there, which costs more time again.
+- Gemma's vocabulary isn't Qwen's, so a Gemma dataset trains a Qwen student only on its text:
+  `--distill`'s KL against the teacher's logits needs a shared tokenizer. What the student
+  learns is the text, reasoning included when it is on.
+- Whether reasoning traces train a better repair is not measured by this pilot. Board v2 grades
+  with thinking off.
+
+The pilot's outputs are `gemma4-26b-a4b-qat{,-think}.gpilot.jsonl`.

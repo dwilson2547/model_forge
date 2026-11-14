@@ -152,8 +152,9 @@ Fixes + fired experiments recorded in design §0j.
 - [ ] Data selection (`distill/curate.py`, docs/datasets.md "Curating"): embed + score the full `wide`
       answers against the [25,29] slice, then a fixed-budget comparison (random / balanced / need,
       same N) on board v2. `nll_base` from the scores answers part of the drift check above
-- [ ] Gemma 4 26B A4B teacher on a `wide` subset on the Mac (`prompts subset`); pilot (`gpilot`,
-      140 prompts, thinking off vs on) running 2026-11-14 decides thinking
+- [ ] Gemma 4 26B A4B teacher on a `wide` subset (`prompts subset`). Pilot done 2026-11-14
+      (docs/datasets.md): thinking on is 3× the time, 8% capped, +1/50 gold. Mode for the full
+      subset to be chosen
 - [x] KLD row in the floor (llama-perplexity --kl-divergence-base on base, --kl-divergence
       on candidates): distance-from-base that domain adaptation can't game
 - [ ] Incident-triage benchmark task (proof-of-concept 2026-11-08, LM Studio): candidate models
