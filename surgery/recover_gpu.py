@@ -40,7 +40,9 @@ Cloud-lane additions (design §0j.8, review 2026-11-12):
   the repair can't buy wikitext/code PPL by specializing (§0j.11). The teacher runs bf16,
   frozen, in the same process; the KL is computed in checkpointed position chunks so the
   two 248k-vocab fp32 softmaxes never coexist for a whole batch. Held-out loss is the same
-  KL.
+  KL. With --sft-dataset (teacher-generated chats, distill/datagen.py) the KL is taken on
+  the assistant positions only (prompt labels are -100): the student matches the teacher's
+  whole distribution on the teacher's own answers, in the deployed chat format.
 - --push-repo uploads the run's artifacts to a private HF repo after the results json is
   written (token from HF_TOKEN / the cached login, never from a file in the repo).
 """
@@ -316,8 +318,8 @@ def main():
 
     teacher = None
     if args.distill:
-        if args.sft or args.sft_dataset:
-            raise SystemExit("--distill is raw-completion only")
+        if args.sft:
+            raise SystemExit("--distill works on a raw corpus or an --sft-dataset, not --sft v2")
         print(f"[recover-gpu] loading bf16 teacher {args.distill}…", flush=True)
         teacher = AutoModelForCausalLM.from_pretrained(args.distill, dtype=torch.bfloat16,
                                                        device_map={"": 0})

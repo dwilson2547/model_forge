@@ -23,13 +23,14 @@ from surgery import paths  # noqa: E402
 
 
 class LlamaServer:
-    def __init__(self, model, port=None, ctx=32768, threads=32, threads_batch=96):
+    def __init__(self, model, port=None, ctx=32768, threads=32, threads_batch=96, parallel=None):
         import random
         self.model = str(model)
         self.port = port or random.randint(8100, 8990)
         self.ctx = ctx
         self.threads = threads
         self.threads_batch = threads_batch
+        self.parallel = parallel  # None = llama-server's default; board v2 runs N slots, ctx = N x per-slot
         self.proc = None
 
     def _wait_ready(self, timeout=600):
@@ -61,7 +62,8 @@ class LlamaServer:
             [str(binpath), "-m", self.model,
              "--port", str(self.port), "-c", str(self.ctx),
              "-t", str(self.threads), "-tb", str(self.threads_batch),
-             "--metrics"] + (["-ngl", ngl] if ngl else []),
+             "--metrics"] + (["-ngl", ngl] if ngl else [])
+            + (["-np", str(self.parallel), "--no-kv-unified"] if self.parallel else []),
             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
         )
         self._wait_ready()
