@@ -1,7 +1,9 @@
 #!/bin/bash
 # Chat-distill the [25,29] slice (design §0j.14): the unsliced base answers the distill/
-# prompt mix (thinking kept), then the slice trains on KL(base || slice) over those answers
-# in the chat template, instead of over raw mixed.train.txt text like 2529-distill.
+# prompt mix (thinking off, datagen's default), then the slice trains on KL(base || slice)
+# over those answers in the chat template, instead of over raw mixed.train.txt text like
+# 2529-distill. The fixed holdout ids stay out of training (--holdout) so distill/chatkld.py
+# can score the result; HIDDEN=1 adds the hidden-state term (design §0j.15).
 #   bash scripts/qwen35-4b/distill-chat.sh            # STAGE=data|train|all (default all)
 # Desktop 5080. Peak disk ~9 GB (one f16 GGUF, deleted after generation).
 set -euo pipefail
@@ -28,6 +30,7 @@ fi
 if [ "$STAGE" != data ]; then
   $PY surgery/recover_gpu.py $SLICE --sft-dataset $ROOT/data/distill/$TEACHER.$MIX.jsonl \
       --distill $BASE --out $OUT --ctx 8192 --batch 1 --accum 4 --epochs 1 \
-      --lora-r 16 --lr 1e-4 --seed 1234 --val-frac 0.02 --stop-on-val-rise 3
+      --lora-r 16 --lr 1e-4 --seed 1234 --val-frac 0.02 --stop-on-val-rise 3 --holdout \
+      ${HIDDEN:+--hidden-loss $HIDDEN --dropped 25 29}
 fi
 echo "=== CHATDISTILL DONE $(date -Is)"

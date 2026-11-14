@@ -1354,6 +1354,64 @@ by a Q4 copy of the base on a shared job queue (`docs/datasets.md`); training sc
 the bf16 base on those answers. Train at a context that covers the needle range, or re-check
 needle afterwards.
 
+### 0j.15 — Repair at the cut: measured-damage picks, a linear bridge, hidden-state targets (2026-11-14, tooling; results pending)
+
+External review (Claude, 2026-11-14) of §0f–§0j.13. Every repair arm so far changed how hard
+the slice trains (rank, lr, dose, diet, mixers, full weights) and scored the result at the final
+logits. None changed where the training signal comes from, and the picks came from a score that
+doesn't measure loss. Three tools, all landed and tested on a tiny random Qwen3.5 on CPU; real
+numbers are not in yet.
+
+**What the review measured from the existing ledger** (`results/board2.jsonl`, paired items):
+the wound loses 31 HumanEval items base passes. 2529-distill recovers 14 of them and breaks 16
+the wound had kept, so "flat on code" (§0j.13) is ~30 items flipping each way, not no effect.
+The wound's failures are mostly one wrong token in otherwise correct code
+(`result.append('').join(...)`, a function renamed `find_close_elements`); 5 of 31 don't
+compile, 3 hit the token limit. That is what 84% top-1 agreement looks like on long exact
+outputs. Consequence: HumanEval deltas of ±0.03 between repairs are not readable; per-token
+agreement on held-out answers is the metric that can rank them.
+
+**1. Pick by measured damage** (`surgery/damage_scan.py`). Drop each block alone
+(`gguf_drop`, no HF load), score KLD against the uncut model on the same tokens; with
+`--greedy K` the cheapest joins the set and the rest are rescored on top of it, because damage
+isn't additive (the 27B's drop6 → drop8 cliff, §0j.10). Reasons to distrust the cosine scorer:
+its 4B pick [25,29] is a worse unrepaired wound than [24,28] (§0j.9), and its 27B picks are all
+early layers. Full-attention blocks are candidates too: their protection (§0a) was never
+measured. Running on the Altra since 2026-11-14 13:40: the 4B at f16 (4 rounds) and the 27B at
+Q8_0 (6 rounds, later rounds over the 16 cheapest single drops); fineweb + code, 8 chunks;
+ledger `results/damage.jsonl`.
+
+**2. A linear bridge, no training** (`surgery/bridge.py`). Fit, by least squares on
+calibration text, the linear map that best stands in for each dropped layer, folded into the
+`down_proj` of the layer before the cut: same shape, same speed. This is the ReplaceMe recipe
+(arXiv 2505.02819 ⚠ unverified: cited from memory, not re-read). Its report gives the share of
+the missing layer's effect still missing on held-out windows. A per-token linear map cannot mix
+tokens, so how much it recovers on the linear-attention blocks is the open question; the
+`unexplained_stream` figure is the ceiling for any linear map at that cut.
+
+**3. Hidden-state targets** (`recover_gpu.py --hidden-loss W --dropped ...`). The teacher is
+the slice plus two layers, so every layer boundary past the first cut has an exact target.
+The loss adds W × the relative squared error between student and teacher hidden states there,
+over every position (prompt included), on top of the logit KL. `--train-layers` restricts
+training to the layers around the cuts (LoRA or `--full`), so capacity can be concentrated:
+for [25,29] the neighbours are student layers 24–28.
+
+**The metric** (`distill/chatkld.py`). KL(base ‖ student) and top-1 agreement per answer token
+on teacher answers held out of training (`distill.is_holdout`, 781 of the 41k `wide` ids;
+`recover_gpu --holdout` skips them), split by prompt kind, student in bf16 as shipped. The
+base's rows are stored as top-256 log-probs plus a rest bucket, so only one model is on the GPU.
+
+**Arms** (`scripts/qwen35-4b/repair-local.sh`; each changes one thing against 2529-distill):
+bridge alone; `hid` = 2529-distill's recipe + hidden loss; `bridge-hid` = the same from the
+bridged init. Cloud lane (`cloud/README.md` session 2): full-weight training of layers 24–28
+with the hidden loss, and the chat-distill run with it. Judge on chat KLD and top-1 first,
+board v2 for the finalists.
+
+**Not tested: thinking mode.** The `wide` answers are generated with thinking off; LM Studio
+runs these models with thinking on. Whether a thinking-off repair moves the thinking path is
+unknown ⚠ unverified. Check: chat KLD on a few hundred `--think` teacher answers, before and
+after a repair.
+
 ## 5. Milestones
 
 Tracked in [`TODO.md`](../TODO.md); summary:

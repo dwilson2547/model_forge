@@ -169,6 +169,22 @@ Fixes + fired experiments recorded in design §0j.
 - [ ] Instruct checklist + long-context needle tasks; fixed seeds, greedy decoding
 - [ ] Metric pack: quality composite, tok/s, TTFT, RSS, size, quality-per-GB
 
+## Repair at the cut (design §0j.15, tooling landed 2026-11-14)
+
+- [ ] Damage scans on the Altra (`surgery/damage_scan.py`, `~/forge/runs/damage-scan/*.log`,
+      ledger `results/damage.jsonl`): 4B f16 greedy 4, 27B Q8_0 greedy 6. Read: do the measured
+      picks beat [25,29] / the cosine 27B picks unrepaired, and are full-attention blocks
+      really the expensive ones?
+- [ ] `STAGE=prep bash scripts/qwen35-4b/repair-local.sh` on the 5080: bridge, its KLD floor,
+      chat KLD rows for cut / bridge / 2529-distill, hidden-loss trainer calibration
+- [ ] `STAGE=hid` arm (and `ARM=bridge-hid`): does the hidden-state term beat logit KL alone
+      on chat KLD + top-1?
+- [ ] Cloud session 2 (`cloud/README.md`): 27B teacher throughput + pilot, full-weight
+      layers 24–28 with the hidden loss, chat-distill with it
+- [ ] Thinking-mode check: chat KLD on `--think` teacher answers before/after a repair
+- [ ] Surgery-tax control (§0h, never run): uncut base + QLoRA vs drop2 + repair + QLoRA on
+      the triage SFT, same budget
+
 ## M3 — funnel + orchestration — HOLD per review r2 f10 until r2 f5/f6/f9 land: the
 12-item bench just ranks noise faster
 

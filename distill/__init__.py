@@ -25,3 +25,11 @@ provenance (teacher, stop, tokens, check). With --distill the trainer scores KL 
 teacher's full distribution on the answer positions, so the text is a vehicle: what the
 student learns is the teacher's whole next-token distribution in the deployed chat format.
 """
+
+import zlib
+
+
+def is_holdout(rec_id: str) -> bool:
+    """The fixed ~2% of prompt ids no arm trains on (recover_gpu --holdout) and that
+    distill/chatkld.py scores. By id, so it is the same split for every teacher and mix."""
+    return zlib.crc32(rec_id.encode()) % 50 == 0

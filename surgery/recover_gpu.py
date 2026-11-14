@@ -43,6 +43,16 @@ Cloud-lane additions (design §0j.8, review 2026-11-12):
   KL. With --sft-dataset (teacher-generated chats, distill/datagen.py) the KL is taken on
   the assistant positions only (prompt labels are -100): the student matches the teacher's
   whole distribution on the teacher's own answers, in the deployed chat format.
+- --hidden-loss W --dropped <teacher layers>: with --distill, add W x the relative squared
+  error between the student's hidden state after each layer past the first cut and the
+  teacher's after the matching layer (design §0j.15). The teacher is the same model plus the
+  dropped layers, so every layer boundary has an exact target: a far denser signal than the
+  logits alone, and it reaches the layers next to the cut directly.
+- --train-layers <student layers>: train only those decoder layers (LoRA via
+  layers_to_transform, or with --full by freezing the rest). Repair capacity goes where the
+  wound is; with few layers trainable a high LoRA rank is cheap.
+- --holdout: drop the fixed held-out records (distill.is_holdout) from an --sft-dataset, so
+  distill/chatkld.py scores answers no arm trained on.
 - --push-repo uploads the run's artifacts to a private HF repo after the results json is
   written (token from HF_TOKEN / the cached login, never from a file in the repo).
 """
@@ -52,8 +62,11 @@ import fnmatch
 import hashlib
 import json
 import random
+import sys
 import time
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # surgery.*, distill.* as a script
 
 import torch
 import torch.nn.functional as F
@@ -167,6 +180,38 @@ def _cap_sample(raw: str, cap: int) -> str:
     return "".join(parts)
 
 
+def parse_layers(spec):
+    """'23-26,28' -> [23, 24, 25, 26, 28]; '' -> []."""
+    out = []
+    for part in filter(None, spec.split(",")):
+        lo, _, hi = part.partition("-")
+        out += range(int(lo), int(hi or lo) + 1)
+    return sorted(set(out))
+
+
+def layer_map(n_teacher, dropped):
+    """[(student layer j, teacher layer t)] for the student layers past the first cut.
+    Student layer j is teacher layer kept[j]; before the first cut the two models are the
+    same weights on the same input, so there is nothing to match there."""
+    dropped = sorted(set(dropped))
+    if not dropped or not all(0 <= d < n_teacher for d in dropped):
+        raise SystemExit(f"--dropped {dropped}: need teacher layer indices in 0..{n_teacher - 1}")
+    kept = [i for i in range(n_teacher) if i not in dropped]
+    return [(j, t) for j, t in enumerate(kept) if t > dropped[0]]
+
+
+def hidden_match(s_hs, t_hs, pairs, valid):
+    """Mean over the matched layers of |s - t|^2 / |t|^2 on the valid positions.
+    *_hs are HF hidden_states tuples (index 0 = embeddings, i+1 = after layer i)."""
+    m = valid.unsqueeze(-1)
+    tot = 0.0
+    for j, t in pairs:
+        th = t_hs[t + 1].float()
+        d = (s_hs[j + 1].float() - th) * m
+        tot = tot + d.pow(2).sum() / (th * m).pow(2).sum().clamp_min(1e-8)
+    return tot / len(pairs)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("hf_dir", help="edited HF checkpoint to repair")
@@ -217,6 +262,15 @@ def main():
                          "instead of next-token CE (design §0j.12)")
     ap.add_argument("--kd-chunk", type=int, default=128,
                     help="positions per checkpointed KL chunk (VRAM vs speed)")
+    ap.add_argument("--hidden-loss", type=float, default=0.0,
+                    help="weight of the hidden-state matching term (needs --distill and "
+                         "--dropped); 0 = logits only")
+    ap.add_argument("--dropped", type=int, nargs="*", default=[],
+                    help="teacher layer indices the slice removed, e.g. 25 29")
+    ap.add_argument("--train-layers", default="",
+                    help="student decoder layers to train, e.g. 23-26,27 (default: all)")
+    ap.add_argument("--holdout", action="store_true",
+                    help="skip --sft-dataset records in the fixed chat-KLD holdout")
     ap.add_argument("--seed", type=int, default=0,
                     help="0 = unseeded; otherwise seeds torch+random so striped-cap sampling "
                          "and epoch shuffles are repeatable (all future arms should pass it)")
@@ -243,6 +297,9 @@ def main():
         torch.manual_seed(args.seed)
         _rand.seed(args.seed)
     lora_targets = (LORA_TARGETS if args.lora_targets == "all" else LORA_TARGETS_CLASSIC)
+    train_layers = parse_layers(args.train_layers)
+    if args.hidden_loss and not (args.distill and args.dropped):
+        raise SystemExit("--hidden-loss needs --distill <teacher> and --dropped <layers>")
     resume = Path(args.resume) if args.resume else None
     if resume and not (resume / "train_state.pt").exists():
         raise SystemExit(f"--resume {resume}: no train_state.pt — checkpoints written before "
@@ -268,6 +325,12 @@ def main():
                                                      device_map={"": 0})
         model.config.use_cache = False
         model.gradient_checkpointing_enable()
+        if train_layers:
+            from surgery.arch import find_layer_stack
+            stack = find_layer_stack(model)[2]
+            model.requires_grad_(False)
+            for i in train_layers:
+                stack[i].requires_grad_(True)
         n_train = sum(p.numel() for p in model.parameters() if p.requires_grad)
         print(f"[recover-gpu] full-weight: {n_train:,} trainable params", flush=True)
     else:
@@ -295,6 +358,8 @@ def main():
 
         lcfg = LoraConfig(r=args.lora_r, lora_alpha=2 * args.lora_r, lora_dropout=0.0,
                           target_modules=lora_targets,
+                          layers_to_transform=train_layers or None,
+                          layers_pattern="layers" if train_layers else None,
                           bias="none", task_type="CAUSAL_LM")
         model = get_peft_model(model, lcfg, adapter_name="repair")
         if resume:
@@ -327,6 +392,16 @@ def main():
         teacher.eval().requires_grad_(False)
         if teacher.config.get_text_config().vocab_size != model.config.get_text_config().vocab_size:
             raise SystemExit("--distill: teacher and student vocabularies differ")
+        if args.hidden_loss:
+            n_t = teacher.config.get_text_config().num_hidden_layers
+            n_s = model.config.get_text_config().num_hidden_layers
+            hid_pairs = layer_map(n_t, args.dropped)
+            if n_t - len(set(args.dropped)) != n_s:
+                raise SystemExit(f"--dropped {args.dropped}: teacher {n_t} layers minus "
+                                 f"{len(set(args.dropped))} != student {n_s}")
+            print(f"[recover-gpu] hidden-state matching x{args.hidden_loss}: {len(hid_pairs)} "
+                  f"layers, student {hid_pairs[0][0]}..{hid_pairs[-1][0]} -> teacher "
+                  f"{hid_pairs[0][1]}..{hid_pairs[-1][1]}", flush=True)
         print(f"[recover-gpu] teacher loaded; vram {torch.cuda.memory_allocated()/2**30:.1f}GiB",
               flush=True)
 
@@ -343,6 +418,8 @@ def main():
             lt = F.log_softmax(t_head(t_h).float(), dim=-1)
         return (lt.exp() * (lt - ls)).sum()
 
+    kd_parts = {}     # the last kd_loss call's terms, for the log and the held-out curve
+
     def kd_loss(xb, yb):
         """mean per-token KL(teacher || student) over the positions CE would score.
         Works from the final hidden states and projects only the scored positions, in
@@ -352,15 +429,28 @@ def main():
         s_body, s_head = _split(model)
         t_body, t_head = _split(teacher)
         sel = (yb[:, 1:] != -100).nonzero(as_tuple=True)   # position p predicts token p+1
+        hid = args.hidden_loss > 0
         with torch.no_grad():
-            t_h = t_body(input_ids=xb)[0][:, :-1][sel]
-        s_h = s_body(input_ids=xb)[0][:, :-1][sel]
+            t_out = t_body(input_ids=xb, output_hidden_states=hid)
+            t_h = t_out[0][:, :-1][sel]
+        s_out = s_body(input_ids=xb, output_hidden_states=hid)
+        s_h = s_out[0][:, :-1][sel]
         tot = s_h.new_zeros((), dtype=torch.float32)
         for i in range(0, s_h.shape[0], args.kd_chunk):
             tot = tot + checkpoint(_kd_part, s_h[i:i + args.kd_chunk],
                                    t_h[i:i + args.kd_chunk], s_head, t_head,
                                    use_reentrant=False)
-        return tot / max(1, s_h.shape[0])
+        kl = tot / max(1, s_h.shape[0])
+        kd_parts["kl"] = kl.item()
+        if not hid:
+            return kl
+        # every real position, prompt included: a row's labels run to its last real token,
+        # so everything up to the last labelled position is text and the rest is padding
+        last = (yb != -100).float().cumsum(1).argmax(1)
+        valid = torch.arange(xb.shape[1], device=xb.device)[None, :] <= last[:, None]
+        hm = hidden_match(s_out.hidden_states, t_out.hidden_states, hid_pairs, valid)
+        kd_parts["hidden"] = hm.item()
+        return kl + args.hidden_loss * hm
 
     skipped = {}
     cap_mode = "n/a (sft-dataset)"
@@ -380,6 +470,11 @@ def main():
             total[kind][0] += 1
             total[kind][1].add(reason)
 
+        if args.holdout:
+            from distill import is_holdout
+            n0 = len(ds)
+            ds = [r for r in ds if not is_holdout(r["id"])]
+            print(f"[recover-gpu] --holdout: {n0 - len(ds)} held-out records skipped", flush=True)
         for rec in ds:
             kind = rec.get("kind", "?")
             user_msgs = [{"role": "user", "content": rec["user"]}]
@@ -553,7 +648,8 @@ def main():
             k = (tgt != -100).sum().item()
             if teacher is not None:
                 with amp:
-                    tot += kd_loss(xb, yb).item() * k
+                    kd_loss(xb, yb)
+                tot += kd_parts["kl"] * k              # the KL term alone: comparable across arms
             else:
                 with amp:
                     logits = model(input_ids=xb).logits
@@ -630,7 +726,8 @@ def main():
                 save_ckpt(f"step{os_done}", micro + 1)
         if (micro + 1) % log_every == 0 or micro == start_micro:
             dt = time.time() - t0
-            print(f"[recover-gpu] micro {micro+1}/{total_micro} loss {loss.item():.4f} "
+            parts = "".join(f" {k} {v:.4f}" for k, v in kd_parts.items()) if args.hidden_loss else ""
+            print(f"[recover-gpu] micro {micro+1}/{total_micro} loss {loss.item():.4f}{parts} "
                   f"(avg {sum(losses[-log_every:])/len(losses[-log_every:]):.4f}) "
                   f"{tokens_seen/(wall_before + dt):.0f} tok/s {dt:.0f}s "
                   f"vrsm {torch.cuda.memory_allocated()/2**30:.1f}GiB "
@@ -673,6 +770,8 @@ def main():
         "lora_targets": None if args.full else lora_targets,
         "lora_target_mode": None if args.full else args.lora_targets,
         "seed": args.seed,
+        "hidden_loss": args.hidden_loss, "dropped": args.dropped,
+        "train_layers": train_layers or None, "holdout": args.holdout,
         "cap_sampling": cap_mode,
         "chunk_shuffle": True,
         "objective": f"kd-kl(teacher={args.distill})" if args.distill else "ce",

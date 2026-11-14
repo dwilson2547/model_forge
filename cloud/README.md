@@ -108,6 +108,64 @@ How to read the result, on the f16 fineweb floor against the fresh1e arm:
 - **The same:** the wall is the wound, not the adapter. Route around it via the SFT
   line or a smaller wound.
 
+### Session 2 (planned 2026-11-14, design §0j.15): 27B teacher + repair at the cut
+
+Nothing here has run. Do the free parts first: the damage scans (Altra) and
+`STAGE=prep bash scripts/qwen35-4b/repair-local.sh` (desktop) decide which arms are worth paying for.
+
+Extra staging, on top of §1:
+
+```bash
+rsync -a ~/forge/data/distill/{wide.prompts.jsonl,gpilot.prompts.jsonl} $B:forge-data/distill/
+rsync -a ~/forge/data/distill/qwen35-4b-q4.wide.jsonl $B:forge-data/distill/   # the 4B's answers, when complete
+ssh $B 'hf download Qwen/Qwen3.5-4B --local-dir ~/forge-runs/base-4b'
+ssh $B 'hf download unsloth/Qwen3.8-27B-GGUF Qwen3.8-27B-Q8_0.gguf --local-dir ~/forge-runs/27b'
+```
+
+`~/forge.env` must point `FORGE_DATA` at `~/forge-data` (datagen and chatkld read
+`$FORGE_DATA/distill/`).
+
+**2a. 27B teacher throughput, then a pilot.** Ten minutes on a small mix before anything else:
+the batched rate decides whether the whole `wide` mix (41k prompts) is one session or several.
+
+```bash
+python -m distill.prompts subset wide tpilot 300   # 300 per kind, ~3.3k; on the desktop, then rsync it
+python -m distill.datagen qwen38-27b-q8 ~/forge-runs/27b/Qwen3.8-27B-Q8_0.gguf --mix tpilot --slots 16
+```
+
+datagen prints tok/s every 50 prompts. Memory: Q8_0 is 27 GiB; 16 slots x 16k ctx of f16 KV is
+about 16 GiB at 64 KiB/token (§0j.10 arithmetic, not measured at this slot count). Try 32 slots
+if VRAM allows. Push `qwen38-27b-q8.tpilot.jsonl` (and `raw/`) to a private HF dataset repo
+before the instance stops: the text is the reusable asset.
+
+**2b. Full-weight repair of the layers at the cuts, hidden-state loss** (does not fit the 5080
+with the teacher resident). Same data, seed and split as 2529-distill; changes: the objective
+and which weights train.
+
+```bash
+python -m surgery.recover_gpu ~/forge-runs/2529-hf-edited ~/forge-data/mixed.train.txt \
+  --distill ~/forge-runs/base-4b --hidden-loss 1 --dropped 25 29 --full --train-layers 24-28 \
+  --lr 3e-6 --seed 1234 --epochs 1 --max-chars 41000000 --val-frac 0.01 --save-every 0 \
+  --ctx 512 --batch 4 --out ~/forge-runs/2529-hid-full --push-repo <hf-user>/forge-2529-hid-full
+```
+
+`--calibrate --max-chars 600000` first. lr 3e-6 is §0j.9's best full-weight value for all
+layers; with five layers training it may want more ⚠ unverified (add a 1e-5 arm if the first
+is cheap).
+
+**2c. Chat-distill with the hidden loss**, once the 4B's `wide` answers are complete:
+`HIDDEN=1 STAGE=train MIX=wide bash scripts/qwen35-4b/distill-chat.sh` (paths as that script
+sets them; ctx 8192, so calibrate the batch size first).
+
+**Scoring.** In the cloud: `python -m distill.chatkld ref <answers.jsonl>` once, then
+`score <label> <hf dir> <answers.jsonl>` per arm, and `surgery.kld` for the raw-text floor.
+Board v2 needs docker for the code tiers: pull the finalists and run it on the desktop (free).
+
+**27B slice, only if the scan earns it.** If `results/damage.jsonl` shows a 27B drop set well
+under the cosine picks' damage, the next step is bridge + hidden-loss repair of that set with
+the uncut 27B as teacher. Sizes to check before renting for it: bf16 teacher 54 GB + an NF4
+student ≈ 16 GB on one 80 GB card ⚠ unverified (estimate; `--calibrate` decides).
+
 ## 4. Cost discipline
 
 - Verdict experiments only. Stop the instance as soon as the artifacts are pushed.

@@ -65,18 +65,14 @@ def plan(readers, drop):
     return arch, n_all, remap, rec_key, [rec[i] for i in keep]
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("src", type=Path)
-    ap.add_argument("out", type=Path)
-    ap.add_argument("--drop", type=int, nargs="+", required=True)
-    args = ap.parse_args()
-
-    readers = [GGUFReader(p) for p in shards(args.src)]
-    arch, n_all, remap, rec_key, new_rec = plan(readers, args.drop)
+def drop(src, out, drop_ids, quiet=False):
+    """Write `out` = `src` without the blocks in drop_ids. Returns the kept-block count."""
+    src, out = Path(src), Path(out)
+    readers = [GGUFReader(p) for p in shards(src)]
+    arch, n_all, remap, rec_key, new_rec = plan(readers, drop_ids)
     r0 = readers[0]
 
-    w = GGUFWriter(args.out, arch)
+    w = GGUFWriter(out, arch)
     for f in r0.fields.values():
         name = f.name
         if name == Keys.General.ARCHITECTURE or name.startswith("GGUF.") or name.startswith("split."):
@@ -112,11 +108,30 @@ def main():
     for i, (_, t, r) in enumerate(tensors):
         w.write_tensor_data(t.data, tensor_endianess=r.endianess)
         done += t.n_bytes
-        if i % 50 == 0:
+        if i % 50 == 0 and not quiet:
             print(f"[gguf_drop] {done / 2**30:.1f}/{total / 2**30:.1f} GiB", flush=True)
     w.close()
-    print(f"[gguf_drop] {args.out}: {len(remap)}/{n_all} blocks, dropped {sorted(set(args.drop))}, "
+    print(f"[gguf_drop] {out}: {len(remap)}/{n_all} blocks, dropped {sorted(set(drop_ids))}, "
           f"{len(tensors)} tensors, {total / 2**30:.2f} GiB", flush=True)
+    return len(remap)
+
+
+def layout(src):
+    """(n_main, recurrent flags per main block) of a GGUF: which blocks a scan may drop."""
+    readers = [GGUFReader(p) for p in shards(Path(src))]
+    arch, n_all, remap, _, rec = plan(readers, [])
+    nextn_f = readers[0].fields.get(f"{arch}.nextn_predict_layers")
+    n_main = n_all - (field_value(nextn_f) if nextn_f else 0)
+    return n_main, rec[:n_main]
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("src", type=Path)
+    ap.add_argument("out", type=Path)
+    ap.add_argument("--drop", type=int, nargs="+", required=True)
+    args = ap.parse_args()
+    drop(args.src, args.out, args.drop)
 
 
 if __name__ == "__main__":

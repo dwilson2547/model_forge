@@ -21,7 +21,8 @@ triage-SFT arc landed v3 (`qwen35-4b-drop2-sftv3-triage`). Measured story so far
 
 - `docs/design.md` — the design + the measured record (§0a–§0j)
 - `TODO.md` — milestones, review follow-ups, the v4 SFT diet plan
-- `surgery/` — ranking, ops, recipes, GPU QLoRA recovery, triage-corpus extraction
+- `surgery/` — ranking, ops, recipes, GPU QLoRA recovery, triage-corpus extraction; `damage_scan.py` (pick
+  layers by measured KLD), `bridge.py` (closed-form stand-in for a dropped layer)
 - `bench/` — serve harness + task board (chat-mode grading)
 - `distill/` — teacher datasets: prompt mixes, teacher answers (local llama-server or a GPU job queue),
   curation (dedup, clusters, divergence-ranked selection); `docs/datasets.md`
