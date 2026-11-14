@@ -61,3 +61,46 @@ estimate from those two figures, not a run).
 The text a quantized teacher writes is only the vehicle. Training scores KL against the HF teacher's
 own logits on that text, so a Q4 teacher costs only a little off-policy drift ⚠ unverified
 (compare a few hundred Q4 and f16 answers before relying on it).
+
+## The `wide` mix
+
+`distill/prompts.py` reads six pool kinds straight from the cold archive (`$FORGE_POOLS`), so
+`wide` is built on the Altra:
+
+```
+FORGE_BOARD_GRAMS=<grams.json> python -m distill.prompts build --mix wide
+```
+
+`python -m distill.prompts grams <grams.json>` writes the board's 13-grams on a machine that has the
+board sources (the Altra lacks them).
+
+Built 2026-11-14 in 1m46s, 6.6 GB peak RSS: 41,000 prompts, 45.7 MB.
+
+| Kind | Count | Source | License |
+|---|---:|---|---|
+| chat, ifollow, code, math, longctx | 6000, 6000, 4000, 3000, 1000 | as `default` | as `default` |
+| wildchat | 6000 | Tulu 3 `tulu_v3.9_wildchat_100k` | ODC-BY |
+| general | 3000 | Tulu 3 flan_v2, no_robots, oasst1, sciriff, table_gpt | ODC-BY |
+| codemore | 5000 | Magicoder Evol-Instruct 110K + Tulu 3 evol_codealpaca, personahub_code | Apache-2.0 / ODC-BY |
+| mathmore | 5000 | NuminaMath-CoT problems | Apache-2.0 |
+| multiling | 1000 | Tulu 3 `tulu_v3.9_aya_100k` | ODC-BY |
+| safety | 1000 | Tulu 3 wildguardmix, wildjailbreak, coconot | ODC-BY |
+
+The Tulu 3 licences are those of the mixture. Its card says subsets keep their own terms, and those
+weren't checked one by one ⚠ unverified. The mixture's download kept no revision metadata, so its
+revision is unknown (`POOL_REVS`).
+
+The build dropped:
+
+| Drop | Count |
+|---|---:|
+| Over the length limit | 789 (wildchat 633) |
+| Repeated prompt text (pools share rows, and WildChat repeats itself) | 428 |
+| Board overlap: codemore | 21 |
+| Board overlap: ifollow | 1 |
+
+`default` and `smoke` rebuild byte-identical with the text dedupe added.
+
+At the estimated ~1,000 prompts an hour above, `wide` is about 41 hours of a 3080 ⚠ unverified
+(an estimate, not a run). That's why it goes through the job queue path: `distill.datagen <label>
+queue:<model> --mix wide`. Copy `wide.prompts.jsonl` to the machine that runs it.
