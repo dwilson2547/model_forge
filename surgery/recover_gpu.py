@@ -330,24 +330,37 @@ def main():
         print(f"[recover-gpu] teacher loaded; vram {torch.cuda.memory_allocated()/2**30:.1f}GiB",
               flush=True)
 
-    def _kd_part(s_lg, t_lg, m):
-        ls = F.log_softmax(s_lg.float(), dim=-1)
-        lt = F.log_softmax(t_lg.float(), dim=-1)
-        return ((lt.exp() * (lt - ls)).sum(-1) * m).sum()
+    def _split(m):
+        """(backbone, lm_head) of an HF causal LM, through a PEFT wrapper if present.
+        backbone(input_ids)[0] is the final *normed* hidden state for the Qwen3.5 and
+        Gemma 3 ForConditionalGeneration / ForCausalLM classes (logits = lm_head(it))."""
+        hf = m.get_base_model() if hasattr(m, "get_base_model") else m
+        return hf.model, hf.lm_head
 
-    def kd_loss(s_logits, xb, yb):
-        """mean per-token KL(teacher || student) over the positions CE would score"""
-        from torch.utils.checkpoint import checkpoint
+    def _kd_part(s_h, t_h, s_head, t_head):
+        ls = F.log_softmax(s_head(s_h).float(), dim=-1)
         with torch.no_grad():
-            t_logits = teacher(input_ids=xb).logits[:, :-1]
-        s_logits = s_logits[:, :-1]
-        m = (yb[:, 1:] != -100).to(torch.float32)
-        tot = s_logits.new_zeros((), dtype=torch.float32)
-        for i in range(0, s_logits.shape[1], args.kd_chunk):
-            j = i + args.kd_chunk
-            tot = tot + checkpoint(_kd_part, s_logits[:, i:j], t_logits[:, i:j], m[:, i:j],
+            lt = F.log_softmax(t_head(t_h).float(), dim=-1)
+        return (lt.exp() * (lt - ls)).sum()
+
+    def kd_loss(xb, yb):
+        """mean per-token KL(teacher || student) over the positions CE would score.
+        Works from the final hidden states and projects only the scored positions, in
+        checkpointed chunks: full logits at ctx 8k would be ~4 GiB per model (248k vocab),
+        and a long-context prompt's positions are never projected at all."""
+        from torch.utils.checkpoint import checkpoint
+        s_body, s_head = _split(model)
+        t_body, t_head = _split(teacher)
+        sel = (yb[:, 1:] != -100).nonzero(as_tuple=True)   # position p predicts token p+1
+        with torch.no_grad():
+            t_h = t_body(input_ids=xb)[0][:, :-1][sel]
+        s_h = s_body(input_ids=xb)[0][:, :-1][sel]
+        tot = s_h.new_zeros((), dtype=torch.float32)
+        for i in range(0, s_h.shape[0], args.kd_chunk):
+            tot = tot + checkpoint(_kd_part, s_h[i:i + args.kd_chunk],
+                                   t_h[i:i + args.kd_chunk], s_head, t_head,
                                    use_reentrant=False)
-        return tot / m.sum().clamp(min=1)
+        return tot / max(1, s_h.shape[0])
 
     skipped = {}
     cap_mode = "n/a (sft-dataset)"
@@ -536,13 +549,14 @@ def main():
             sel = list(range(s, min(s + args.batch, len(val_ex))))
             xb, yb = collate(val_ex, sel)
             xb, yb = xb.to(model.device), yb.to(model.device)
-            with amp:
-                logits = model(input_ids=xb).logits
             tgt = yb[:, 1:].reshape(-1)
             k = (tgt != -100).sum().item()
             if teacher is not None:
-                tot += kd_loss(logits, xb, yb).item() * k
+                with amp:
+                    tot += kd_loss(xb, yb).item() * k
             else:
+                with amp:
+                    logits = model(input_ids=xb).logits
                 tot += F.cross_entropy(logits[:, :-1].reshape(-1, logits.shape[-1]).float(), tgt,
                                        ignore_index=-100, reduction="sum").item()
             n += k
@@ -585,10 +599,10 @@ def main():
         xb, yb = collate(examples, sel)
         xb, yb = xb.to(model.device), yb.to(model.device)
         with amp:
-            logits = model(input_ids=xb).logits
             if teacher is not None:
-                loss = kd_loss(logits, xb, yb)
+                loss = kd_loss(xb, yb)
             else:
+                logits = model(input_ids=xb).logits
                 loss = F.cross_entropy(logits[:, :-1].reshape(-1, logits.shape[-1]),
                                        yb[:, 1:].reshape(-1), ignore_index=-100)
         (loss / args.accum).backward()

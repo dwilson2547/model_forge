@@ -149,7 +149,7 @@ def needle():
                         "prompt": "".join(parts) + "\n\nFrom the text above: what are the "
                                   f"CURRENT locker codes for {ask[0]} and {ask[1]}? Answer "
                                   f"with two lines, '{ask[0]}: <code>' and '{ask[1]}: <code>'.",
-                        "max_tokens": 2048, "gold": {p: codes[p] for p in ask},
+                        "max_tokens": 4096, "gold": {p: codes[p] for p in ask},
                         "ctx_tokens": length})
     return out
 

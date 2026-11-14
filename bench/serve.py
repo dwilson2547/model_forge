@@ -87,12 +87,12 @@ class LlamaServer:
             pass
         return None
 
-    def chat(self, user, max_tokens=256, temperature=0.0, top_k=1):
+    def chat(self, user, max_tokens=256, temperature=0.0, top_k=1, top_p=1.0, seed=42):
         """One /v1/chat/completions turn (server applies the GGUF's chat template).
         stop_type normalized to the raw endpoint's vocabulary: eos / limit."""
         body = {"messages": [{"role": "user", "content": user}],
                 "n_predict": max_tokens, "temperature": temperature,
-                "top_k": top_k, "seed": 42, "cache_prompt": False}
+                "top_k": top_k, "top_p": top_p, "seed": seed, "cache_prompt": False}
         req = urllib.request.Request(
             f"http://127.0.0.1:{self.port}/v1/chat/completions",
             data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
@@ -104,6 +104,7 @@ class LlamaServer:
         # EMPTY for models that think on every turn (this family does).
         text = (msg.get("reasoning_content") or "") + (msg.get("content") or "")
         return {"text": text, "content": msg.get("content") or "",
+                "reasoning": msg.get("reasoning_content") or "",
                 "stop_type": {"stop": "eos", "length": "limit"}.get(
                     choice.get("finish_reason"), choice.get("finish_reason")),
                 "tokens": out.get("usage", {}).get("completion_tokens", 0)}
