@@ -58,13 +58,19 @@ class LlamaServer:
         # surgery/evaluate.py. A GPU board is its own surface: compare rows from one machine.
         binpath = paths.LLAMA / "build" / "bin" / "llama-server"
         ngl = os.environ.get("FORGE_NGL", "")
+        # stderr goes to a file: a PIPE nobody reads fills at 64 KB and llama-server then
+        # blocks on its next log write (board v2 hung at item 67 of 694, 2026-11-14).
+        logdir = paths.RUNS / "llama-server"
+        logdir.mkdir(parents=True, exist_ok=True)
+        self.log_path = logdir / f"{Path(self.model).stem}-{self.port}.log"
+        self._log = open(self.log_path, "w")
         self.proc = subprocess.Popen(
             [str(binpath), "-m", self.model,
              "--port", str(self.port), "-c", str(self.ctx),
              "-t", str(self.threads), "-tb", str(self.threads_batch),
              "--metrics"] + (["-ngl", ngl] if ngl else [])
             + (["-np", str(self.parallel), "--no-kv-unified"] if self.parallel else []),
-            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL, stderr=self._log, stdin=subprocess.DEVNULL,
         )
         self._wait_ready()
         return self
@@ -76,6 +82,8 @@ class LlamaServer:
                 self.proc.wait(timeout=20)
             except subprocess.TimeoutExpired:
                 self.proc.kill()
+        if getattr(self, "_log", None):
+            self._log.close()
         return False
 
     def peak_rss_gib(self):
