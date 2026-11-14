@@ -83,6 +83,9 @@ the size/quality curve for a 3-bit build.
 
 - Runs comfortably on a 16 GB GPU; a 16k-token context with the default KV cache
   lands at ~15.7 GiB total — effectively the practical ceiling on a 16 GB card.
+- An 8-bit KV cache (`-fa on -ctk q8_0 -ctv q8_0`) halves the cache, so 32k tokens fit
+  where 16k did. Measured against the f16 cache at 8k and 32k windows: mean KL divergence
+  0.002, top-1 agreement 97.5%, perplexity unchanged.
 - This is a thinking-style model: expect long reasoning sections. Budget context
   accordingly.
 - Generation quality at low temperature is unaffected by this quant's errors;

@@ -1187,8 +1187,18 @@ stays open until the larger drops land.
 | drop6 unrepaired IQ3_M | 10.92 GiB | 7.062 (+15%) | 10.456 (+20%) | 2.714 (+6%) | 0.97 GiB ≈ 15.9k tok f16 |
 
 - **q8_0 KV is free at this window:** every corpus within ±0.1% of its f16-KV control. It halves
-  KV to 32 KiB/token, so at 32k ctx it frees 1 GiB, more than drop6, with no surgery. The floor
-  is 512-token chunks; KV-quant error at long windows is ⚠ unverified (longwindow run next).
+  KV to 32 KiB/token, so at 32k ctx it frees 1 GiB, more than drop6, with no surgery.
+- **It stays free at long windows** (2026-11-13, Altra CPU, `scripts/qwen38-27b/kvq8-longwindow.sh`,
+  fineweb, 2 chunks per window; q8_0-KV scored by KLD against f16-KV logits on the same tokens,
+  ledger `results/longwindow.jsonl`):
+
+  | window | PPL f16 KV | PPL q8_0 KV | mean KLD | p99 KLD | same top-1 |
+  |---|---:|---:|---:|---:|---:|
+  | 8k | 7.282 | 7.277 | 0.0022 | 0.015 | 97.4% |
+  | 32k | 7.604 | 7.600 | 0.0020 | 0.014 | 97.6% |
+
+  The error does not grow with context; 0.002 is ~70x below the best 4B repair's KLD (0.147).
+  Measured on fineweb only, up to 32k.
 - **IQ3_XS frees 0.57 GiB, not the ~1 GiB estimated above,** for about +1% everywhere.
 - **drop6 does not pay for a repair.** To match IQ3_XS per GiB it would need fineweb back to
   about 8.8, i.e. 94% of its gap closed. The best 4B repair, distillation (§0j.12), closed 61% of

@@ -34,3 +34,5 @@
 {"model":"mixfull","corpus":"code","window":8192,"chunks":6,"ppl":2.0698}
 {"model":"mixfull","corpus":"code","window":16384,"chunks":6,"ppl":2.1279}
 {"model":"mixfull","corpus":"code","window":32768,"chunks":6,"ppl":1.9680}
+{"label": "27b-IQ3_M-kvq8", "corpus": "fineweb", "window": 8192, "chunks": 2, "ppl_f16kv": 7.2816, "ppl_q8kv": 7.276598, "kld_mean": 0.002172, "kld_p99": 0.015327, "same_top": 97.448, "secs": [982, 1069], "model": "~/forge/runs/qwen38-27b/baseline/srcbf16-IQ3_M.gguf", "flags": "-fa on; q8: -ctk q8_0 -ctv q8_0"}
+{"label": "27b-IQ3_M-kvq8", "corpus": "fineweb", "window": 32768, "chunks": 2, "ppl_f16kv": 7.6039, "ppl_q8kv": 7.600469, "kld_mean": 0.002003, "kld_p99": 0.013695, "same_top": 97.613, "secs": [4238, 5219], "model": "~/forge/runs/qwen38-27b/baseline/srcbf16-IQ3_M.gguf", "flags": "-fa on; q8: -ctk q8_0 -ctv q8_0"}
