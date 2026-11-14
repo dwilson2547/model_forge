@@ -4,6 +4,8 @@
   python -m distill.prompts build [--mix default]      # -> $FORGE_DATA/distill/<mix>.prompts.jsonl
   python -m distill.datagen <label> <teacher.gguf> [--mix default] [--slots 4]
                                                        # -> $FORGE_DATA/distill/<label>.<mix>.jsonl
+  python -m distill.datagen <label> queue:<model> ...  # same, as background jobs on an HTTP GPU
+                                                       # job queue (distill/queue.py)
   surgery/recover_gpu.py <student hf> --sft-dataset <that jsonl> --distill <teacher hf> ...
 
 The prompt mix is model-agnostic and fixed by its seed, so every teacher (Qwen, Gemma, ...)

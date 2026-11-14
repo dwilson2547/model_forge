@@ -3,6 +3,9 @@
   python -m distill.datagen <label> <teacher.gguf> [--mix default] [--slots 4]
                             [--temp 0.6] [--top-p 0.95] [--top-k 20] [--think]
 
+<teacher> is a GGUF path (a local llama-server), or queue:<model> to send the prompts to an HTTP
+GPU job queue as background jobs (distill/queue.py; FORGE_QUEUE_URL, FORGE_QUEUE_TOKEN).
+
 <label> names the teacher (e.g. qwen35-4b-base, gemma-...); output is
 $FORGE_DATA/distill/<label>.<mix>.jsonl and resumes from it after a crash. Sampling
 defaults are Qwen's published thinking-mode settings; set them per teacher family from
@@ -31,7 +34,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from bench.serve import LlamaServer  # noqa: E402
-from distill import prompts  # noqa: E402
+from distill import prompts, queue  # noqa: E402
 
 
 def _check(rec, answer):
@@ -63,7 +66,10 @@ def run(label, teacher, mix="default", slots=4, slot_ctx=16384, temp=0.6, top_p=
     todo.sort(key=lambda r: -len(r["user"]))       # long prompts first: no stragglers
     print(f"[datagen] {label} on {mix}: {len(done)} cached, {len(todo)} to generate "
           f"({slots} slots, T={temp} top_p={top_p} top_k={top_k})", flush=True)
-    if todo:
+    if todo and str(teacher).startswith("queue:"):
+        with raw_p.open("a") as f:
+            queue.run(str(teacher)[6:], todo, f, done, raw_p.with_suffix(".queue.json"), think=think)
+    elif todo:
         t0, toks = time.time(), 0
         with LlamaServer(teacher, ctx=slots * slot_ctx, parallel=slots) as srv, \
                 raw_p.open("a") as f, ThreadPoolExecutor(slots) as pool:
@@ -88,8 +94,8 @@ def run(label, teacher, mix="default", slots=4, slot_ctx=16384, temp=0.6, top_p=
     with open(out_p, "w") as f:
         for it in todo_all:
             r = done[it["id"]]
-            reason = ("limit" if r["stop"] != "eos" else "empty-answer" if not r["answer"]
-                      else None)
+            reason = (r["stop"] if r["stop"] != "eos"       # limit, or failed/cancelled in a queue
+                      else "empty-answer" if not r["answer"] else None)
             chk = _check(it, r["answer"])
             if reason is None and only_correct and chk is False:
                 reason = "wrong"
