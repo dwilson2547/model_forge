@@ -96,6 +96,7 @@ The build dropped:
 |---|---:|
 | Over the length limit | 789 (wildchat 633) |
 | Repeated prompt text (pools share rows, and WildChat repeats itself) | 428 |
+| Contains a NUL character (a Postgres-backed queue rejects it) | 4 |
 | Board overlap: codemore | 21 |
 | Board overlap: ifollow | 1 |
 

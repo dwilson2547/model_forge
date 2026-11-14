@@ -269,6 +269,9 @@ def build(mix="default"):
             if not user or len(user) > MAX_PROMPT_CHARS:
                 dropped[f"{kind}:length"] = dropped.get(f"{kind}:length", 0) + 1
                 continue
+            if "\x00" in user:   # a NUL can't be stored as JSON text by a Postgres-backed queue
+                dropped[f"{kind}:nul"] = dropped.get(f"{kind}:nul", 0) + 1
+                continue
             if user in seen:
                 dropped[f"{kind}:duplicate"] = dropped.get(f"{kind}:duplicate", 0) + 1
                 continue
