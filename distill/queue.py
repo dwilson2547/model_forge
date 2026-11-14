@@ -3,6 +3,9 @@
   FORGE_QUEUE_URL=... FORGE_QUEUE_TOKEN=... \
   python -m distill.datagen <label> queue:<model> [--mix default] [--think]
 
+An in-cluster queue can be reached through `kubectl port-forward`; polling survives the
+forward dropping and being restarted.
+
 Submits every prompt not yet answered as a *background* job (bulk work that runs only while
 nothing interactive is queued), saves the batch ids beside the raw cache so a rerun resumes
 polling instead of resubmitting, then polls until every job has finished, appending each answer
@@ -17,12 +20,29 @@ GET /v1/batches/<id> -> {complete, jobs: [{id, status, result, error}]}. Each in
 import json
 import os
 import time
+import urllib.error
 import urllib.request
 
 BATCH = 1000      # the queue's per-request input limit
 
 
-def _api(method, path, body=None):
+def _api(method, path, body=None, tries=30):
+    """One call, retried for ~30 min across a dropped connection (e.g. a restarted port-forward).
+    A POST is retried only when it never reached the server, so a batch isn't submitted twice."""
+    for t in range(tries):
+        try:
+            return _call(method, path, body)
+        except urllib.error.HTTPError:
+            raise
+        except (urllib.error.URLError, ConnectionError, TimeoutError) as e:
+            if method == "POST" and not isinstance(getattr(e, "reason", None), ConnectionRefusedError):
+                raise
+            print(f"  queue unreachable ({e}); retry {t + 1}/{tries} in 60s", flush=True)
+            time.sleep(60)
+    return _call(method, path, body)
+
+
+def _call(method, path, body=None):
     url = os.environ["FORGE_QUEUE_URL"].rstrip("/") + path
     req = urllib.request.Request(url, method=method,
                                  data=json.dumps(body).encode() if body is not None else None,
