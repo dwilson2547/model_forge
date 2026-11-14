@@ -1,12 +1,17 @@
 """Board v2 runner: the bench/suites.py items through one llama-server, graded, ledgered.
 
-  python -m bench.board2 run <label> <model.gguf> [--tiers humaneval,gsm8k] [--slots 4]
+  python -m bench.board2 run <label> <model.gguf> [--tiers humaneval,gsm8k] [--slots 4] [--think]
   python -m bench.board2 compare <label-a> <label-b>     # paired, item by item
 
 Chat mode only (/v1/chat/completions, the GGUF's own template), greedy, so any family with a
-chat template runs unchanged (Qwen, Gemma, ...). Answers are graded on the post-thinking
-content; a response that spends its whole budget thinking scores 0 and is counted as
-`limit`. Raw responses go to $FORGE_ROOT/runs/board2/<label>.jsonl (a rerun resumes from
+chat template runs unchanged (Qwen, Gemma, ...). Thinking is OFF by default
+(enable_thinking=false; templates without the switch ignore it): with it on, the Qwen3.5-4B
+base burns its whole 4096-token budget re-checking itself on 136 of 200 IFEval prompts and
+scores 0.30, while with it off it scores 0.92 on 24 of those same prompts (2026-11-14) - a
+thinking-mode board measures loop rate, not the skill. --think runs the thinking-mode board
+(label it e.g. `base-think@5080`): its `limit` counts are the runaway-thinking signal.
+Answers are graded on the post-thinking content; a response that hits max_tokens scores 0
+and is counted as `limit`. Raw responses go to $FORGE_ROOT/runs/board2/<label>.jsonl (a rerun resumes from
 it); the summary row, with every item's score for paired comparison, appends to
 $FORGE_ROOT/results/board2.jsonl.
 
@@ -109,7 +114,7 @@ GRADERS = {"humaneval": g_code, "mbpp": g_code, "gsm8k": g_gsm8k, "ifeval": g_if
 
 # ---------------------------------------------------------------- run
 
-def _generate(label, model, items, slots, slot_ctx):
+def _generate(label, model, items, slots, slot_ctx, think=False):
     RAW.mkdir(parents=True, exist_ok=True)
     raw_path = RAW / f"{label}.jsonl"
     done = {}
@@ -124,7 +129,7 @@ def _generate(label, model, items, slots, slot_ctx):
     with LlamaServer(model, ctx=slots * slot_ctx, parallel=slots) as srv, \
             raw_path.open("a") as f, ThreadPoolExecutor(slots) as pool:
         def one(it):
-            r = srv.chat(it["prompt"], max_tokens=it["max_tokens"])
+            r = srv.chat(it["prompt"], max_tokens=it["max_tokens"], think=think)
             return {"id": it["id"], "content": r["content"], "think_chars":
                     len(r["text"]) - len(r["content"]), "stop": r["stop_type"],
                     "tokens": r["tokens"]}
@@ -137,10 +142,10 @@ def _generate(label, model, items, slots, slot_ctx):
     return done
 
 
-def run(label, model, tiers=None, slots=4, slot_ctx=32768):
+def run(label, model, tiers=None, slots=4, slot_ctx=32768, think=False):
     items = suites.items(tiers)
     t0 = time.time()
-    raw = _generate(label, model, items, slots, slot_ctx)
+    raw = _generate(label, model, items, slots, slot_ctx, think)
     gen_s = time.time() - t0
 
     def grade(it):
@@ -165,6 +170,7 @@ def run(label, model, tiers=None, slots=4, slot_ctx=32768):
     for g in graded:
         scores[g[0]] = round(g[2], 4)
     row = {"label": label, "model": str(model), "board": "v2", "seed": suites.SEED,
+           "think": think,
            "slots": slots, "tiers": tiers_out,
            "composite": round(sum(v["score"] for v in tiers_out.values()) / len(tiers_out), 4),
            "gen_s": round(gen_s), "date": time.strftime("%Y-%m-%dT%H:%M:%S"), "items": scores}
@@ -209,10 +215,12 @@ def suites_tier(item_id):
 
 def main():
     a = sys.argv[1:]
+    think = "--think" in a
+    a = [x for x in a if x != "--think"]
     if a[:1] == ["run"] and len(a) >= 3:
         opts = dict(zip(a[3::2], a[4::2]))
         run(a[1], a[2], tiers=opts["--tiers"].split(",") if "--tiers" in opts else None,
-            slots=int(opts.get("--slots", 4)))
+            slots=int(opts.get("--slots", 4)), think=think)
     elif a[:1] == ["compare"] and len(a) == 3:
         compare(a[1], a[2])
     else:

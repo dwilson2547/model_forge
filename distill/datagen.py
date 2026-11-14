@@ -1,12 +1,18 @@
 """Answer a prompt mix with a teacher GGUF and write a --sft-dataset for the trainer.
 
   python -m distill.datagen <label> <teacher.gguf> [--mix default] [--slots 4]
-                            [--temp 0.6] [--top-p 0.95] [--top-k 20]
+                            [--temp 0.6] [--top-p 0.95] [--top-k 20] [--think]
 
 <label> names the teacher (e.g. qwen35-4b-base, gemma-...); output is
 $FORGE_DATA/distill/<label>.<mix>.jsonl and resumes from it after a crash. Sampling
 defaults are Qwen's published thinking-mode settings; set them per teacher family from
 its model card (record them in the run's notes, they are not stored per record).
+
+Thinking is OFF by default (enable_thinking=false), matching board v2: with it on, the
+Qwen3.5-4B base runs out of a 4096-token budget re-checking itself on most IFEval-style
+prompts (2026-11-14), which here would drop the hardest prompts from the dataset and fill
+the rest with loops. --think keeps thinking traces; the label then gets a `-think` suffix
+so the two datasets never share a file.
 
 Kept only when the teacher finished on its own (stop = eos) with a non-empty answer: a
 response cut at max_tokens would teach the student to never close. Dropped responses stay
@@ -42,7 +48,9 @@ def _check(rec, answer):
 
 
 def run(label, teacher, mix="default", slots=4, slot_ctx=16384, temp=0.6, top_p=0.95,
-        top_k=20, only_correct=False):
+        top_k=20, only_correct=False, think=False):
+    if think:
+        label += "-think"
     src = prompts.DIR / f"{mix}.prompts.jsonl"
     if not src.exists():
         raise SystemExit(f"{src} missing: python -m distill.prompts build --mix {mix}")
@@ -62,7 +70,7 @@ def run(label, teacher, mix="default", slots=4, slot_ctx=16384, temp=0.6, top_p=
             def one(it):
                 r = srv.chat(it["user"], max_tokens=it["max_tokens"], temperature=temp,
                              top_k=top_k, top_p=top_p,
-                             seed=zlib.crc32(it["id"].encode()) % 2**31)
+                             seed=zlib.crc32(it["id"].encode()) % 2**31, think=think)
                 return {"id": it["id"], "reasoning": r["reasoning"].strip(),
                         "answer": r["content"].strip(), "stop": r["stop_type"],
                         "tokens": r["tokens"]}
@@ -101,14 +109,15 @@ def run(label, teacher, mix="default", slots=4, slot_ctx=16384, temp=0.6, top_p=
 
 def main():
     a = sys.argv[1:]
-    flags = {"--only-correct"} & set(a)
+    flags = {"--only-correct", "--think"} & set(a)
     a = [x for x in a if x not in flags]
     if len(a) < 2:
         raise SystemExit(__doc__)
     opts = dict(zip(a[2::2], a[3::2]))
     run(a[0], a[1], mix=opts.get("--mix", "default"), slots=int(opts.get("--slots", 4)),
         temp=float(opts.get("--temp", 0.6)), top_p=float(opts.get("--top-p", 0.95)),
-        top_k=int(opts.get("--top-k", 20)), only_correct=bool(flags))
+        top_k=int(opts.get("--top-k", 20)), only_correct="--only-correct" in flags,
+        think="--think" in flags)
 
 
 if __name__ == "__main__":

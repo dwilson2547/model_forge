@@ -8,8 +8,9 @@
 
 The prompt mix is model-agnostic and fixed by its seed, so every teacher (Qwen, Gemma, ...)
 answers the same prompts and their datasets are comparable. The teacher runs through
-llama-server with the GGUF's own chat template; thinking (reasoning_content) is kept
-separately from the answer, and a teacher without a thinking mode simply leaves it empty.
+llama-server with the GGUF's own chat template, thinking off by default (--think keeps
+reasoning_content separately from the answer; a teacher without a thinking mode leaves it
+empty).
 
 Every prompt that shares a 13-word run with a board v2 item (bench/suites.py) is dropped
 before it reaches a teacher: training on the board would make the board meaningless.

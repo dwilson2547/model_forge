@@ -95,12 +95,15 @@ class LlamaServer:
             pass
         return None
 
-    def chat(self, user, max_tokens=256, temperature=0.0, top_k=1, top_p=1.0, seed=42):
+    def chat(self, user, max_tokens=256, temperature=0.0, top_k=1, top_p=1.0, seed=42,
+             think=None):
         """One /v1/chat/completions turn (server applies the GGUF's chat template).
         stop_type normalized to the raw endpoint's vocabulary: eos / limit."""
         body = {"messages": [{"role": "user", "content": user}],
                 "n_predict": max_tokens, "temperature": temperature,
                 "top_k": top_k, "top_p": top_p, "seed": seed, "cache_prompt": False}
+        if think is not None:   # templates without the switch (e.g. Gemma) just ignore it
+            body["chat_template_kwargs"] = {"enable_thinking": bool(think)}
         req = urllib.request.Request(
             f"http://127.0.0.1:{self.port}/v1/chat/completions",
             data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
