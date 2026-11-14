@@ -33,6 +33,21 @@ Perplexity, lower is better (`surgery/multicorpus.py`, 24 chunks; ledger `result
 | **this arm, f16** | 7.785 | 11.556 | 3.186 |
 | this arm, Q4_K_M | 7.923 | 11.816 | 3.227 |
 
+## Board v2
+
+694 items, chat mode, greedy, thinking off, desktop 5080 (design §0j.13; ledger
+`results/board2.jsonl`).
+
+| arm (f16, thinking off) | humaneval | mbpp | gsm8k | ifeval | needle | composite |
+|---|---:|---:|---:|---:|---:|---:|
+| base | 0.872 | 0.740 | 0.960 | 0.894 | 0.983 | 0.890 |
+| unrepaired [25,29] | 0.701 | 0.690 | 0.875 | 0.840 | 0.983 | 0.818 |
+| 2529-fresh1e | 0.732 | 0.660 | 0.875 | 0.847 | 0.917 | 0.806 |
+| 2529-distill | 0.707 | 0.660 | 0.915 | 0.867 | 0.950 | 0.820 |
+
+Against the wound: flat on every tier but needle, which it loses (-0.067 ± 0.032, 4 items worse /
+0 better). Its IFEval answers run long (~643 tokens, 18 limit hits vs base's 7).
+
 ## Verdict
 
 **Best QLoRA floor of the project.** Fresh data is a live lever; held-out loss was still falling. On the M5 shelf. The comparator for the full-weight arms.

@@ -1311,6 +1311,49 @@ on behaviour and is closer by every KLD row, so it replaces fresh1e on the shelf
 against each other from here needs either a harder board or KLD; the 9-task v1 board only catches
 gross damage.
 
+### 0j.13 — Board v2: the wound is behavioural, and raw-text repair barely touches it (2026-11-14)
+
+**Board.** `bench/board2.py`, 694 items: HumanEval 164, MBPP 100 (sandboxed tests), GSM8K 200,
+IFEval 200 (strict, instruction-level), needle 30 (2k-24k). Chat mode, greedy, max 4096 tokens,
+4 slots, desktop 5080, f16 GGUFs. Ledger `results/board2.jsonl`; `python -m bench.board2 compare
+<a> <b>` gives the paired per-tier deltas.
+
+**Thinking is off by default.** The first base run kept thinking on: composite 0.674 in 94 min,
+IFEval 0.30, with 136 of 200 IFEval items hitting the 4096 limit on loops ("Wait, I'll write the
+song." repeated). That measured greedy thinking loops, not skill. Thinking off, base is 0.890 in
+18 min. The thinking-on row stays in the ledger as `base-think@5080`; `--think` reproduces it.
+
+**Noise floor.** Two base runs: identical on every tier except IFEval, 0.894 vs 0.906 (7 of 200
+items differ). With 4 parallel slots, llama-server isn't bit-deterministic even at greedy, so an
+IFEval gap under ~0.015 between arms is noise.
+
+| arm | humaneval | mbpp | gsm8k | ifeval | needle | composite |
+|---|---:|---:|---:|---:|---:|---:|
+| base | 0.872 | 0.740 | 0.960 | 0.894 | 0.983 | **0.890** |
+| base (rerun) | 0.872 | 0.740 | 0.960 | 0.906 | 0.983 | 0.892 |
+| unrepaired [25,29] | 0.701 | 0.690 | 0.875 | 0.840 | 0.983 | **0.818** |
+| 2529-fresh1e (CE) | 0.732 | 0.660 | 0.875 | 0.847 | 0.917 | **0.806** |
+| 2529-distill (KL) | 0.707 | 0.660 | 0.915 | 0.867 | 0.950 | **0.820** |
+
+**Findings.**
+1. The board resolves the wound the v1 board called nearly free: -0.072 composite, HumanEval
+   -0.171 ± 0.033 (31 items worse / 3 better), GSM8K -0.085 ± 0.022.
+2. Neither repair recovers code. Against the wound: distill HumanEval +0.006, fresh1e +0.030,
+   both inside one se.
+3. Distill recovers part of math and instruct following: GSM8K +0.040 ± 0.021 (13 better / 5
+   worse), IFEval +0.027 ± 0.022. fresh1e recovers neither (GSM8K +0.000, IFEval +0.007).
+4. Both repairs lose needle the wound kept: distill -0.033, fresh1e -0.067 ± 0.032. Both
+   trained at 512 ctx, which may cost long-context retrieval ⚠ unverified (a hypothesis, not
+   tested).
+5. §0j.12's KLD ranking holds in direction (distill > fresh1e) but not in size: a 34% lower
+   fineweb KLD buys +0.014 composite. Raw-text KLD is a weak proxy for chat behaviour.
+
+**Consequences.** The repair has to see chat-shaped text: the chat-distill run (§0j.14, planned) trains on
+the base's own answers to a prompt mix in the chat template. The 41k `wide` mix is being answered
+by a Q4 copy of the base on a shared job queue (`docs/datasets.md`); training scores KL against
+the bf16 base on those answers. Train at a context that covers the needle range, or re-check
+needle afterwards.
+
 ## 5. Milestones
 
 Tracked in [`TODO.md`](../TODO.md); summary:

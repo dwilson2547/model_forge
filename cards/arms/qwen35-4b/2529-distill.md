@@ -51,7 +51,26 @@ Chat mode, desktop 5080, f16 (design §0j.12; ledger `results/bench.jsonl`, labe
 | 2529-fresh1e | 1.0 | 0.6 | 1.0 | 0.867 | 0.7 |
 | **this arm** | 1.0 | 0.6 | 1.0 | **0.867** | 0.7 |
 
+## Board v2
+
+694 items, chat mode, greedy, thinking off, desktop 5080 (design §0j.13; ledger
+`results/board2.jsonl`). Two base runs differ by 0.012 on IFEval and 0 elsewhere.
+
+| arm (f16, thinking off) | humaneval | mbpp | gsm8k | ifeval | needle | composite |
+|---|---:|---:|---:|---:|---:|---:|
+| base | 0.872 | 0.740 | 0.960 | 0.894 | 0.983 | 0.890 |
+| unrepaired [25,29] | 0.701 | 0.690 | 0.875 | 0.840 | 0.983 | 0.818 |
+| 2529-fresh1e | 0.732 | 0.660 | 0.875 | 0.847 | 0.917 | 0.806 |
+| 2529-distill | 0.707 | 0.660 | 0.915 | 0.867 | 0.950 | 0.820 |
+
+Against the wound it gains GSM8K +0.040 (± 0.021, 13 items better / 5 worse) and IFEval +0.027
+(± 0.022), loses needle -0.033, and is flat on code. It closes about half the wound's GSM8K loss
+and none of its HumanEval loss (-0.165 vs base).
+
 ## Verdict
+
+Board v2 (2026-11-14) qualifies the verdict below: the repair recovers some math and instruct
+behaviour but none of the code, so KLD-close on raw text is not behaviour-close.
 
 **Closest to the base of any repair, on every corpus, by a wide margin, and it ties base on the
 board.** Its PPL is higher than fresh1e's because it no longer specializes on the training diet.

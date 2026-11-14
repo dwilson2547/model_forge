@@ -143,11 +143,12 @@ Fixes + fired experiments recorded in design §0j.
 ## M2 — benchmark suite
 
 - [ ] Floor tier: wikitext-2 + fineweb-sample perplexity runner
-- [ ] D2 tier (review r2 f9 — the current 12-item board moves in 0.25 steps and cannot
-      resolve small gaps): coding subset through the existing Docker sandbox
-      (MBPP/HumanEval-style, >=50–100 items, disjoint from any training corpus — r2 f8
-      warns code.train and code.test are both llama.cpp), and an IFEval-style instruct
-      set at the same scale; fixed seeds, greedy decoding
+- [x] D2 tier: board v2 (`bench/board2.py`, 694 items: HumanEval, MBPP, GSM8K, IFEval, needle;
+      greedy, thinking off). First lineup 2026-11-14, design §0j.13: wound -0.072 composite,
+      raw-text repairs recover little of it
+- [ ] Chat-distill [25,29] on the `wide` answers (41k, being generated on the shared queue,
+      `docs/datasets.md`); train ctx long enough for the needle range, then board v2
+- [ ] Check Q4-vs-f16 teacher drift on a few hundred `wide` prompts before trusting the Q4 text
 - [x] KLD row in the floor (llama-perplexity --kl-divergence-base on base, --kl-divergence
       on candidates): distance-from-base that domain adaptation can't game
 - [ ] Incident-triage benchmark task (proof-of-concept 2026-11-08, LM Studio): candidate models
