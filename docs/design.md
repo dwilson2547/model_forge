@@ -1598,6 +1598,12 @@ Repairs trained with no thinking text close the same share of the gap on thinkin
 with thinking on (8 with it off), so only finished answers are scored and looping itself is
 not measured; and the two rows cover different prompts.
 
+**Chat-format scan of the 27B** (Altra, Q8_0, same corpus, 16 chunks, 4 rounds over the 12
+cheapest singles): cheapest single layers 7, 4, 13, 9, 8, 12 (0.021–0.025); greedy set
+[4, 7, 9, 14] at 0.059. The raw-text scan had picked [7, 14, 15, 16, 17, 29]; the cosine
+scorer's 27B picks were also early layers. Not board-tested, and not pursued: IQ3_M + q8 KV
+already frees the memory (§0j.10), and the 35B MoE matches the 27B at 3x the speed.
+
 **Thinking-on cap hits** (the looping the check above cannot see). Each model answered the
 same 150 prompts through llama-server (f16, 4 slots, T 0.6, cap 4,096); count that hit the cap:
 

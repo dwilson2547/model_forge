@@ -190,7 +190,7 @@ Fixes + fired experiments recorded in design §0j.
 - [x] Full chat-format scan + board on its pair [13,28] (2026-11-15): 0.816 vs 0.818, level
 - [x] Board v2: Qwen3.8-27B IQ3_M 0.927 vs Qwen3.6-35B-A3B IQ3_S 0.925 on the 5080: level,
       the MoE ~3x faster
-- [ ] Chat-format scan of the 27B (Altra, `scan-27b-chat.log`)
+- [x] Chat-format scan of the 27B (2026-11-15): early layers cheapest, set [4,7,9,14]; not pursued
 - [ ] Chat-distill on the full `wide` set when the 4B's answers are complete; then with the
       27B's answers (`distill/vgen.py`, ~10 h rented)
 - [x] Thinking-on cap hits (2026-11-15, §0j.17): base 65/150, cut 68, repairs 47 and 49
