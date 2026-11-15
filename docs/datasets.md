@@ -185,3 +185,38 @@ queue, at greedy decoding with a 4096 cap, once with thinking off and once with 
   with thinking off.
 
 The pilot's outputs are `gemma4-26b-a4b-qat{,-think}.gpilot.jsonl`.
+
+### First scores: 6,587 `wide` answers vs the [25,29] slice (2026-11-14)
+
+The run took about 3 hours on the 5080, with a pause. 3 records were over the context limit.
+Per-answer mean KL(base ‖ student): p10 0.085, median 0.207, p90 0.437, p99 0.749.
+
+| Kind | n | KL mean | KL p90 |
+|---|---:|---:|---:|
+| multiling | 29 | 0.54 | 0.92 |
+| safety | 90 | 0.40 | 0.49 |
+| wildchat | 1190 | 0.37 | 0.55 |
+| ifollow | 51 | 0.28 | 0.52 |
+| chat | 1451 | 0.26 | 0.36 |
+| general | 1289 | 0.24 | 0.45 |
+| codemore | 1198 | 0.18 | 0.28 |
+| code | 253 | 0.15 | 0.21 |
+| longctx | 1000 | 0.13 | 0.20 |
+| mathmore | 38 | 0.11 | 0.16 |
+
+- **Mean KL ranks open-ended text first.** The top clusters are story writing, role-play and
+  essays. Code and maths are at the bottom. Board v2 says the cut hurts code most (§0j.13).
+  The two disagree because a per-token mean is largest where the next word is uncertain, and
+  creative text is uncertain everywhere. A code answer can be wrong because of a few tokens,
+  and averaging over the whole answer hides them.
+- **KL tracks how surprised the base is by the text** (Pearson correlation 0.62 with
+  `nll_base`). It hardly tracks answer length (0.15 with log length).
+- So `need` as written would mostly pick creative writing. It needs a score that doesn't follow
+  uncertainty, then a check against board v2's per-task losses, before it goes in the
+  comparison. Candidates:
+  - excess loss: `nll_student − nll_base`
+  - KL divided by the base's entropy
+  - the mean of each answer's worst-token KLs
+- **Drift.** The f16 base's median NLL on its Q4 build's answers is 0.233 per token, against
+  0.405 for the student. This is a baseline for the Q4-vs-f16 check, not the check itself.
+  That still needs f16 answers to the same prompts.
