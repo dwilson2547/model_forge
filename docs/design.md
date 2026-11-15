@@ -1607,6 +1607,19 @@ small against their board gap, so it screens, it does not replace the board.
 GSM8K 0.960, IFEval 0.896, needle 1.000), 1 slot, 24 min, 2 limit hits. Above the 4B base at
 f16 (0.890), the gain almost all on code.
 
+**Qwen3.8-27B IQ3_M on the 5080, same board**: **0.927** (HumanEval 0.963, MBPP 0.820, GSM8K
+0.965, IFEval 0.884, needle 1.000), 1 slot, 76 min, 4 limit hits, ~51 tok/s, 14.8 GiB used.
+The two are level on the board (0.927 vs 0.925, inside the per-tier standard errors); the MoE
+generated the board in a third of the time and uses 0.5 GiB more.
+
+**[13,28], the chat-format scan's pair, unrepaired**: board v2 0.816 against 0.818 for
+[25,29]. Paired: HumanEval +0.030 ± 0.040, MBPP +0.010 ± 0.046, GSM8K +0.015 ± 0.028, IFEval
++0.003 ± 0.025, needle −0.067 ± 0.032 (4 items worse, none better). Chat KLD 0.169 against
+0.243. So the chat-format scan did not mislead as the raw-text one did, and its lower KLD did
+not buy a better board either: the two pairs are level, and [25,29] keeps the long-document
+tier. The full single-drop table on chat-format text puts 28, 25, 26, 29, 24 cheapest
+(0.051–0.071), the band the cosine scorer chose.
+
 ## 5. Milestones
 
 Tracked in [`TODO.md`](../TODO.md); summary:

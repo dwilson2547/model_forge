@@ -187,8 +187,10 @@ Fixes + fired experiments recorded in design §0j.
       board v2 (2529-distill 0.820), the gain on code; repairs carry over to thinking-on
       answers; Qwen3.6-35B-A3B IQ3_S scores 0.925
 - [x] Chat-format scan validation: ranks [25,29] ahead of [12,16], narrowly
-- [ ] Read the full chat-format scan (`~/forge/runs/damage-scan/scan-4b-chat.log`, Altra)
-- [ ] Board v2: Qwen3.8-27B IQ3_M on the 5080 (running), against the 35B MoE's 0.925
+- [x] Full chat-format scan + board on its pair [13,28] (2026-11-15): 0.816 vs 0.818, level
+- [x] Board v2: Qwen3.8-27B IQ3_M 0.927 vs Qwen3.6-35B-A3B IQ3_S 0.925 on the 5080: level,
+      the MoE ~3x faster
+- [ ] Chat-format scan of the 27B (Altra, `scan-27b-chat.log`)
 - [ ] Chat-distill on the full `wide` set when the 4B's answers are complete; then with the
       27B's answers (`distill/vgen.py`, ~10 h rented)
 - [ ] Thinking mode: measure looping (cap-hit rate) of base vs slice vs repair, thinking on
