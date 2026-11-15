@@ -180,8 +180,15 @@ Fixes + fired experiments recorded in design §0j.
       do the measured picks beat the cosine 27B picks unrepaired?
 - [x] Prep stage (2026-11-14): the bridge is not a repair at [25,29] (chat KLD 0.225 → 0.221);
       2529-distill reads 0.153; hidden-loss trainer 1,393 tok/s, 11.9 GiB
-- [ ] `STAGE=hid` arm (and `ARM=bridge-hid`): does the hidden-state term beat logit KL alone
-      on chat KLD + top-1?
+- [x] `STAGE=hid` arm (2026-11-15): no. 2529-hid 0.154 vs 2529-distill 0.153 chat KLD
+- [x] Cloud session 2, generation lane (2026-11-15, §0j.16): 27B `wide` is ~10 h / ~$17 with
+      vLLM; Gemma ~4 h / ~$7; thinking on costs 3-4x and loses 20% of 27B answers to the cap
+- [ ] Overnight 5080 queue 2026-11-15 (`~/forge/runs/_logs/overnight.sh`): chat KLD on the
+      268-answer holdout, thinking-mode check (4B base answers, thinking off/on, 150 prompts),
+      chat-distill on 13k `wide` answers (`2529-chatdistill-p14k`) + board, 27B IQ3_M board
+- [ ] Chat-format scan on the Altra (`run-4b-chat.sh`): does KLD on chat-format code/maths
+      answers rank [25,29] ahead of [12,16], as the board does?
+- [ ] Board v2: Qwen3.6-35B-A3B IQ3_S vs Qwen3.8-27B IQ3_M on the 5080
 - [ ] Cloud session 2 (`cloud/README.md`): 27B teacher throughput + pilot, full-weight
       layers 24–28 with the hidden loss, chat-distill with it
 - [ ] Thinking-mode check: chat KLD on `--think` teacher answers before/after a repair

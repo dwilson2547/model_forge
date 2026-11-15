@@ -1,6 +1,6 @@
 """Pick layers to drop by measured damage: drop each one, score KL divergence from the uncut model.
 
-  python -m surgery.damage_scan <label> <model.gguf> [--corpora fineweb,code] [--chunks 8]
+  python -m surgery.damage_scan <label> <model.gguf> [--corpora fineweb,code,name=/path.txt] [--chunks 8]
                                 [--greedy 4] [--candidates linear|all] [--start 25 29] [--only 3 7] [--top 16]
 
 Why (design §0j.15): the cosine scorer (ranking.py) scores how little a layer turns the
@@ -159,7 +159,13 @@ def main():
     ap.add_argument("--only", type=int, nargs="*", default=[], help="score just these blocks")
     a = ap.parse_args()
     tmp = Path(os.environ.get("FORGE_SCAN_TMP", str(paths.RUNS / "damage-scan" / a.label)))
-    chosen = scan(a.label, a.model, a.corpora.split(","), a.chunks, a.greedy, a.candidates,
+    names = []
+    for c in a.corpora.split(","):          # name, or name=/path/to/text for a corpus not in CORPORA
+        n, _, path = c.partition("=")
+        if path:
+            multicorpus.CORPORA[n] = str(Path(path).expanduser())
+        names.append(n)
+    chosen = scan(a.label, a.model, names, a.chunks, a.greedy, a.candidates,
                   a.start, tmp, only=a.only, top=a.top)
     print(f"[scan] {a.label}: greedy set after {a.greedy} round(s): {chosen}")
 

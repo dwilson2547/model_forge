@@ -53,6 +53,8 @@ user turn.
 |---|---|---|
 | Desktop 5080 | f16, 4 slots | board v2 base: 694 prompts in 18 min (2026-11-14) |
 | A shared 3080 job queue | Q4_K_M, 1 slot | ~160 tok/s decode ⚠ unverified for this workload |
+| Rented A100 80GB | Qwen3.8-27B: Q8_0 llama.cpp 16 slots / bf16 vLLM 160 concurrent | 229 / 955 tok/s; full `wide` 43 h / 10 h (2026-11-15, design §0j.16) |
+| Rented A100 80GB | Gemma 4 26B-A4B-it: Q8_0 llama.cpp / bf16 vLLM | 398 / 1,963 tok/s; full `wide` 20 h / 4 h |
 
 Board answers average 290–450 tokens with thinking off. At 160 tok/s that is roughly 1,000
 prompts an hour on the 3080, or about 24k a day if nothing else uses the GPU ⚠ unverified (an

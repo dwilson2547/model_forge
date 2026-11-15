@@ -125,6 +125,24 @@ ssh $B 'hf download unsloth/Qwen3.8-27B-GGUF Qwen3.8-27B-Q8_0.gguf --local-dir ~
 `~/forge.env` must point `FORGE_DATA` at `~/forge-data` (datagen and chatkld read
 `$FORGE_DATA/distill/`).
 
+**Ran 2026-11-15 (generation lane only; design §0j.16).** Use vLLM, not llama.cpp, for bulk
+generation: 955 vs 229 tok/s on the 27B. As run:
+
+```bash
+hf download Qwen/Qwen3.8-27B --local-dir ~/forge-runs/27b-hf          # 52 GB, ~3 min
+uv venv --python 3.12 ~/vllm-env && VIRTUAL_ENV=~/vllm-env uv pip install vllm   # 0.33.0
+PATH=~/vllm-env/bin:/usr/local/cuda/bin:$PATH vllm serve ~/forge-runs/27b-hf --served-model-name q27 \
+  --dtype bfloat16 --max-model-len 20480 --gpu-memory-utilization 0.95 --port 8001
+python -m distill.vgen qwen38-27b <mix> q27 --conc 160
+python -m distill.datagen export qwen38-27b --mix <mix>
+```
+
+Full `wide` is ~10 h (~$17). Gemma: `google/gemma-4-26B-A4B-it`, `--temp 1.0 --top-k 64`,
+~4 h. Lessons: bootstrap now builds `llama-server` and installs `ninja-build` (both were
+missing); on a fresh image wait for its own apt run to release the dpkg lock before
+bootstrapping; never `pkill -f <pattern>` over ssh with the pattern in the command line.
+The 2a text below is the pre-session plan, kept for the llama.cpp commands.
+
 **2a. 27B teacher throughput, then a pilot.** Ten minutes on a small mix before anything else:
 the batched rate decides whether the whole `wide` mix (41k prompts) is one session or several.
 

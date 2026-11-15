@@ -15,7 +15,7 @@ echo "=== [1/6] system deps ==="
 if command -v apt-get > /dev/null; then
   sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     build-essential cmake curl git python3-venv python3-pip python3-dev ccache \
-    libcurl4-openssl-dev rsync > /dev/null
+    libcurl4-openssl-dev rsync ninja-build > /dev/null
 fi
 nvidia-smi > /dev/null || { echo "FATAL: no GPU visible"; exit 1; }
 # Some images ship gcc N with only g++ N-1, so `gcc` can't compile C++ (no cc1plus) and
@@ -85,7 +85,7 @@ if [ ! -x ~/llama.cpp/build/bin/llama-perplexity ]; then
   cmake -S ~/llama.cpp -B ~/llama.cpp/build -DGGML_CUDA=ON \
     -DCMAKE_CUDA_ARCHITECTURES="$CUDA_ARCH" -DCMAKE_BUILD_TYPE=Release > /dev/null
   cmake --build ~/llama.cpp/build --config Release -j "$(nproc)" \
-    --target llama-perplexity llama-quantize llama-imatrix llama-cli > /dev/null
+    --target llama-perplexity llama-quantize llama-imatrix llama-cli llama-server > /dev/null
 fi
 
 echo "=== [5/6] ~/forge.env ==="

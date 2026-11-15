@@ -1,6 +1,6 @@
 """Chat-format distance from the base, on teacher answers no arm trained on.
 
-  python -m distill.chatkld ref <dataset.jsonl> [--base <hf>] [--ctx 8192] [--max 800]
+  python -m distill.chatkld ref <dataset.jsonl> [--base <hf>] [--ctx 8192] [--max 800] [--all]
   python -m distill.chatkld score <label> <student hf> <dataset.jsonl> [--nf4]
 
 Why (design §0j.15): raw-text KLD turned out a weak proxy for chat behaviour (§0j.13: a 34%
@@ -39,10 +39,11 @@ def _ref_path(dataset):
     return DIR / (Path(dataset).name.removesuffix(".jsonl") + ".ref.pt")
 
 
-def holdout(dataset, ctx, cap, tok):
-    """[(record, prefix ids, target ids)] of the held-out records that fit ctx, in id order."""
+def holdout(dataset, ctx, cap, tok, every=False):
+    """[(record, prefix ids, target ids)] of the held-out records that fit ctx, in id order.
+    every: all records (a dataset no arm trained on, e.g. a thinking-mode probe)."""
     out = []
-    for rec in sorted((r for r in load(dataset) if is_holdout(r["id"])), key=lambda r: r["id"]):
+    for rec in sorted((r for r in load(dataset) if every or is_holdout(r["id"])), key=lambda r: r["id"]):
         prefix, tgt = render(tok, rec)
         if len(prefix) + len(tgt) <= ctx:
             out.append((rec, prefix, tgt))
@@ -60,11 +61,11 @@ def _positions(model, prefix, tgt, chunk=1024):
         yield F.log_softmax(model.lm_head(h[i:i + chunk]).float(), -1)
 
 
-def ref(dataset, base=BASE, ctx=8192, cap=800):
+def ref(dataset, base=BASE, ctx=8192, cap=800, every=False):
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
     tok = AutoTokenizer.from_pretrained(base)
-    items = holdout(dataset, ctx, cap, tok)
+    items = holdout(dataset, ctx, cap, tok, every)
     if not items:
         raise SystemExit("no held-out records in this dataset")
     t = AutoModelForCausalLM.from_pretrained(base, dtype=torch.bfloat16, device_map={"": 0}).eval()
@@ -153,11 +154,12 @@ def score(label, student, dataset, nf4=False):
 
 def main():
     a = sys.argv[1:]
-    flags = {"--nf4"} & set(a)
+    flags = {"--nf4", "--all"} & set(a)
     a = [x for x in a if x not in flags]
     if a[:1] == ["ref"] and len(a) >= 2:
         o = dict(zip(a[2::2], a[3::2]))
-        ref(a[1], base=o.get("--base", BASE), ctx=int(o.get("--ctx", 8192)), cap=int(o.get("--max", 800)))
+        ref(a[1], base=o.get("--base", BASE), ctx=int(o.get("--ctx", 8192)), cap=int(o.get("--max", 800)),
+            every="--all" in flags)
     elif a[:1] == ["score"] and len(a) == 4:
         score(a[1], a[2], a[3], nf4="--nf4" in flags)
     else:

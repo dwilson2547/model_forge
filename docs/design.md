@@ -1464,7 +1464,21 @@ training to the layers around the cuts (LoRA or `--full`), so capacity can be co
 for [25,29] the neighbours are student layers 24–28.
 
 Calibration on the 5080 (2026-11-14, QLoRA r16, batch 2, accum 2, ctx 512): 1,393 tok/s, peak
-11.9 GiB; both terms fall over 72 optimizer steps. The `hid` arm started 2026-11-14 21:50.
+11.9 GiB; both terms fall over 72 optimizer steps.
+
+Result (`2529-hid`, 2026-11-15; 2529-distill's recipe plus `--hidden-loss 1`, 4,655 optimizer
+steps, 2 h on the 5080): no measurable difference from 2529-distill.
+
+| [25,29] | Chat KLD | top-1 | fineweb / code KLD |
+|---|---:|---:|---:|
+| unrepaired | 0.225 | 86.1% | 0.300 / 0.149 |
+| 2529-distill | 0.153 | 88.1% | 0.147 / 0.067 |
+| 2529-hid | 0.154 | 88.2% | 0.147 / 0.066 |
+
+Per kind the two repairs are within noise (code 0.049 vs 0.053, mathmore 0.086 vs 0.086, chat
+0.137 vs 0.138). At QLoRA r16, where the signal comes from does not matter. Not separated:
+whether the adapter is the limit (the full-weight `--train-layers` arm tests that) or ~0.15 is
+what this cut gives back on this data.
 
 **The metric** (`distill/chatkld.py`). KL(base ‖ student) and top-1 agreement per answer token
 on teacher answers held out of training (`distill.is_holdout`, 781 of the 41k `wide` ids;
@@ -1481,6 +1495,60 @@ board v2 for the finalists.
 runs these models with thinking on. Whether a thinking-off repair moves the thinking path is
 unknown ⚠ unverified. Check: chat KLD on a few hundred `--think` teacher answers, before and
 after a repair.
+
+### 0j.16 — Cloud session 2: what a teacher dataset costs, and thinking on vs off (2026-11-15)
+
+One Brev A100 80GB at $1.66/hr for about 2 h 50 min. Generation only; scripts as run are in
+`cloud/session2/`, answers and logs in `~/forge/data/distill/cloud2/` (desktop).
+
+**Method.** `tsamp` is 500 prompts drawn at random (seed 1234) from the 41k `wide` mix, run to
+completion; the full set is that time x 82. A time-boxed run would not do: `datagen` answers
+the longest prompts first, so a cap measures only the long end. The 140-prompt `gpilot` is too
+small for a rate (load, a few long prompts and two runaway answers dominate it).
+
+| Teacher, engine | tok/s | 500 prompts | Hit cap | Gold correct | Full `wide` |
+|---|---:|---:|---:|---:|---:|
+| Qwen3.8-27B Q8_0, llama.cpp, 16 slots | 229 | 31.4 min | 20 | 46/50 | 43 h, ~$71 |
+| Qwen3.8-27B bf16, vLLM, 64 concurrent | 823 | 8.7 min | 19 | 46/50 | 12 h, ~$20 |
+| Qwen3.8-27B bf16, vLLM, 160 concurrent | 955 | 7.4 min | 16 | 46/50 | 10 h, ~$17 |
+| Gemma 4 26B-A4B-it Q8_0, llama.cpp, 16 slots | 398 | 14.3 min | 4 | 47/50 | 20 h, ~$33 |
+| Gemma 4 26B-A4B-it bf16, vLLM, 160 concurrent | 1,963 | 2.9 min | 5 | 47/50 | 4 h, ~$7 |
+
+- llama.cpp times include the model load; vLLM times exclude it (3 min for the 27B, 2 min
+  for Gemma). vLLM 0.33.0 loads both architectures. It takes the whole card (77 GiB).
+- llama.cpp at 32 slots was slower than at 16 on `gpilot` (640 s vs 524 s); VRAM 45 GiB at
+  16 slots, 64 GiB at 32.
+- Gemma is a 26B-total, 4B-active MoE; the user's reading is that this is why it is ~2x the
+  dense 27B's speed ⚠ unverified (not isolated here).
+- Gemma's sampling (T 1.0, top-k 64, top-p 0.95) is its published `generation_config.json`.
+- Mean answer: 27B 865 tokens (median 511), Gemma 685.
+- `gpilot` on Gemma, llama.cpp: 3 min 50 s, 45/50, against 42 min on the Mac (docs/datasets.md).
+
+**Thinking on** (vLLM, 160 concurrent, cap raised to 8,192, same 500 prompts):
+
+| | Gemma off | Gemma on | 27B off | 27B on |
+|---|---:|---:|---:|---:|
+| Wall time | 2.9 min | 8.6 min | 7.4 min | 32.8 min |
+| Mean tokens | 686 | 2,001 | 846 | 3,045 |
+| Hit the cap | 5 | 18 | 16 | 100 |
+| Gold correct | 47/50 | 46/50 | 46/50 | 46/50 |
+| Full `wide` | 4 h, ~$7 | 12 h, ~$19 | 10 h, ~$17 | 45 h, ~$74 |
+
+- The 27B with thinking on loses 20% of its answers to an 8,192 cap, mostly code and open
+  chat (codemore 30, wildchat 23, chat 20, mathmore 10), not only hard maths.
+- No gain on the 50 gold-checked answers for either teacher. That sample is GSM8K and needle
+  prompts; it does not measure whether traces train a better student.
+- The server ran without a reasoning parser, so thinking text is inline at the start of
+  `answer` in these files.
+
+**Consequences.** A 27B thinking-off `wide` set is a ~$17 overnight job with vLLM
+(`distill/vgen.py`). An all-thinking 27B set is not worth $74 at a 20% loss; if traces are
+tested, use Gemma or maths prompts only. Open before a real run: the 4,096 cap loses 3-4% of
+thinking-off answers (maths and code); push answers off the box as they are written.
+
+**Qwen3.6-35B-A3B on the 5080 (2026-11-15).** unsloth UD-IQ3_S (12.7 GiB) loads fully on the
+card: 15.3 GiB used at 32k context, 109 and 154 tok/s on two prompts. Board v2 at 1 slot:
+results in `results/board2.jsonl` when the run lands.
 
 ## 5. Milestones
 
