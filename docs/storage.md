@@ -7,7 +7,7 @@ come from `surgery/paths.py`, and scripts use `${FORGE_ROOT:-~/forge}`.
 |---|---|---|
 | Repo | `ai/model-forge` | All code, recipes, cards, and the result ledgers in `results/`. No weights. |
 | Working | `~/forge/` on the Altra and the desktop | What is in use now. Local NVMe. |
-| Cold archive | `/mnt/models/` on the Altra (CIFS share, spinning disk) | Bulk storage we may want back. |
+| Share | `/mnt/models/forge/` (CIFS share, spinning disk; mounted on the Altra and the desktop) | A mirror of `~/forge/`: the same relative path as on both machines. |
 
 ## The tree
 
@@ -18,12 +18,37 @@ come from `surgery/paths.py`, and scripts use `${FORGE_ROOT:-~/forge}`.
   runs/<family>/<experiment>/<arm>/        outputs + that arm's logs
   results/                                 ledgers: multicorpus.jsonl, bench.jsonl, longwindow.jsonl
 
-/mnt/models/                               (cold)
-  hf/<hf-org>/<repo>/                      anything downloaded from HF: the user's LM Studio
-                                           downloads and the forge's upstream weights alike
-  forge/<family>/<experiment>/<arm>/       archived runs and builds, same paths as ~/forge/runs/
+/mnt/models/
+  forge/                                   mirror of ~/forge/ (base/, data/, runs/, results/)
+  forge/<family>/<experiment>/<arm>/       arms archived before 2026-11-14 by archive-arm.sh
+                                           (hf/, adapter/, README.md, SHA256SUMS); not yet
+                                           folded into forge/runs/
+  hf/<hf-org>/<repo>/                      anything downloaded from HF, the user's LM Studio
+                                           downloads included
+  datasets/<hf-org>/<repo>/                prompt pools (docs/datasets.md)
 ```
 
+## Mirroring to the share (2026-11-14)
+
+`scripts/storage/share-sync.sh` copies `~/forge` to `/mnt/models/forge` and back, path for
+path, from either machine:
+
+```
+share-sync.sh push  [subpath]    # upload; never deletes on the share
+share-sync.sh check [subpath]    # list what the share lacks or holds differently
+share-sync.sh clean <subpath>    # check, and delete the local copy only if nothing differs
+share-sync.sh pull  <subpath>    # bring it back
+```
+
+- `clean` compares size and mtime. `CHECKSUM=1` compares content, slowly.
+- The damage scan's scratch files and `*.part` files are skipped.
+- From the desktop the script goes through `ssh ampere`: the desktop's mount of the share is
+  not writable by the user ⚠ unverified (read from the mount options, not tried).
+- A ledger with the same name on both machines must hold the same rows, or the later push
+  replaces the earlier one. `bench.jsonl` was the only such file and was merged 2026-11-14.
+- First full push from the Altra started 2026-11-14 (`~/forge/runs/_logs/share-push.log`).
+
+```
 - **Families:** `qwen35-4b`, `qwen38-27b`. A new model gets its own family.
 - **Experiments:** `slice` (unrepaired cuts, by recipe name), `drop2-repair` (one arm per
   repair config), `baseline` (the do-nothing quants and their imatrix), `drop-context`
@@ -33,7 +58,7 @@ come from `surgery/paths.py`, and scripts use `${FORGE_ROOT:-~/forge}`.
   `design.md` is versioned. The Altra's repo copy is an rsync target, not a git clone, so
   the ledger cannot live there.
 
-## The cold share: rules
+## The share: rules
 
 The share is CIFS on spinning disk: slow, large, and reliable enough for archives.
 
