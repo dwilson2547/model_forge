@@ -1547,8 +1547,65 @@ tested, use Gemma or maths prompts only. Open before a real run: the 4,096 cap l
 thinking-off answers (maths and code); push answers off the box as they are written.
 
 **Qwen3.6-35B-A3B on the 5080 (2026-11-15).** unsloth UD-IQ3_S (12.7 GiB) loads fully on the
-card: 15.3 GiB used at 32k context, 109 and 154 tok/s on two prompts. Board v2 at 1 slot:
-results in `results/board2.jsonl` when the run lands.
+card: 15.3 GiB used at 32k context, 109 and 154 tok/s on two prompts. Board v2: §0j.17.
+
+### 0j.17 — Chat-distill on 13k teacher answers: the first repair that moves code (2026-11-15)
+
+`2529-chatdistill-p14k`: the [25,29] slice, 2529-distill's recipe (QLoRA r16, lr 1e-4, seed
+1234, KL against the bf16 base), trained on the 4B teacher's chat answers instead of raw text:
+the 12,804 non-held-out records of the `wide` mix answered so far (13,072 kept of 13,803; the
+longest prompts come first, so long chat, code and long-context are over-represented and maths
+is thin: 143 GSM8K, 264 NuminaMath). ctx 8192, batch 1, accum 4, one epoch = 3,137 optimizer
+steps, 4.3 h on the 5080 at 1,039 tok/s, peak 14.6 GiB. It did not stop early. Held-out loss
+0.304 → 0.178 after 313 steps → 0.1450, 0.1442, 0.1440 over the last three evals: nearly flat,
+so more passes over the same 13k are unlikely to help; more or different data might.
+
+| [25,29] | Board v2 | HumanEval | MBPP | GSM8K | IFEval | Needle |
+|---|---:|---:|---:|---:|---:|---:|
+| base | 0.890 | 0.872 | 0.740 | 0.960 | 0.894 | 0.983 |
+| unrepaired | 0.818 | 0.701 | 0.690 | 0.875 | 0.840 | 0.983 |
+| 2529-distill (raw text) | 0.820 | 0.707 | 0.660 | 0.915 | 0.867 | 0.950 |
+| 2529-chatdistill-p14k | **0.842** | **0.768** | 0.710 | 0.905 | 0.859 | 0.967 |
+
+Paired against 2529-distill: HumanEval +0.061 ± 0.030 (17 better, 7 worse), MBPP +0.050 ±
+0.039, GSM8K −0.010 ± 0.019, IFEval −0.007 ± 0.021. A third of the board gap to base is
+closed (0.818 → 0.842 of 0.890), and the gain is on code, where every raw-text repair was flat.
+
+| | Chat KLD (268 held out) | top-1 | code | mathmore | chat | fineweb / code raw-text KLD |
+|---|---:|---:|---:|---:|---:|---:|
+| unrepaired | 0.243 | 85.0% | 0.109 | 0.092 | 0.310 | 0.300 / 0.149 |
+| 2529-distill | 0.160 | 87.3% | 0.075 | 0.069 | 0.195 | 0.147 / 0.067 |
+| 2529-hid | 0.163 | 87.3% | 0.078 | 0.070 | 0.198 | 0.147 / 0.066 |
+| 2529-chatdistill-p14k | **0.128** | 89.0% | 0.044 | 0.040 | 0.163 | 0.197 / 0.091 |
+
+- **It is worse than 2529-distill on raw-text KLD and better on the board.** The third time
+  raw text and tasks disagree (§0j.13, §0j.15). Per-kind chat KLD agrees with the board here.
+- **Data, not the loss, was the lever**: the hidden-state term changed nothing; changing the
+  training text did.
+- Still open: the other 28k `wide` answers (and the maths they hold), the 27B as teacher
+  (§0j.16), and whether the adapter caps this.
+
+**Thinking-mode check** (the review's open question). The 4B base (f16, 4 slots) answered 150
+`tsamp` prompts with thinking off and on; scored with `chatkld ref --all`:
+
+| Scored on base answers with | Kept of 150 | unrepaired | 2529-distill | 2529-chatdistill-p14k |
+|---|---:|---:|---:|---:|
+| thinking off | 142 | 0.259 | 0.168 | 0.136 |
+| thinking on | 85 | 0.170 | 0.108 | 0.087 |
+
+Repairs trained with no thinking text close the same share of the gap on thinking-on answers
+(35% vs 37% for 2529-distill). Two limits: the base hit the 4,096 cap on 65 of 150 prompts
+with thinking on (8 with it off), so only finished answers are scored and looping itself is
+not measured; and the two rows cover different prompts.
+
+**Chat-format scan, validation** (Altra, `distill/chattext.py` corpus of code, codemore and
+mathmore answers, 16 chunks): [25,29] 0.145, [12,16] 0.153, [12,13,15,16] 0.325. The order is
+the board's (0.818, 0.763, 0.434); raw text had it reversed. The gap between the first two is
+small against their board gap, so it screens, it does not replace the board.
+
+**Qwen3.6-35B-A3B UD-IQ3_S on the 5080**: board v2 **0.925** (HumanEval 0.951, MBPP 0.820,
+GSM8K 0.960, IFEval 0.896, needle 1.000), 1 slot, 24 min, 2 limit hits. Above the 4B base at
+f16 (0.890), the gain almost all on code.
 
 ## 5. Milestones
 

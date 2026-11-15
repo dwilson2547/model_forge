@@ -183,15 +183,16 @@ Fixes + fired experiments recorded in design §0j.
 - [x] `STAGE=hid` arm (2026-11-15): no. 2529-hid 0.154 vs 2529-distill 0.153 chat KLD
 - [x] Cloud session 2, generation lane (2026-11-15, §0j.16): 27B `wide` is ~10 h / ~$17 with
       vLLM; Gemma ~4 h / ~$7; thinking on costs 3-4x and loses 20% of 27B answers to the cap
-- [ ] Overnight 5080 queue 2026-11-15 (`~/forge/runs/_logs/overnight.sh`): chat KLD on the
-      268-answer holdout, thinking-mode check (4B base answers, thinking off/on, 150 prompts),
-      chat-distill on 13k `wide` answers (`2529-chatdistill-p14k`) + board, 27B IQ3_M board
-- [ ] Chat-format scan on the Altra (`run-4b-chat.sh`): does KLD on chat-format code/maths
-      answers rank [25,29] ahead of [12,16], as the board does?
-- [ ] Board v2: Qwen3.6-35B-A3B IQ3_S vs Qwen3.8-27B IQ3_M on the 5080
-- [ ] Cloud session 2 (`cloud/README.md`): 27B teacher throughput + pilot, full-weight
-      layers 24–28 with the hidden loss, chat-distill with it
-- [ ] Thinking-mode check: chat KLD on `--think` teacher answers before/after a repair
+- [x] Overnight 5080 queue 2026-11-15 (§0j.17): chat-distill on 13k answers scores 0.842 on
+      board v2 (2529-distill 0.820), the gain on code; repairs carry over to thinking-on
+      answers; Qwen3.6-35B-A3B IQ3_S scores 0.925
+- [x] Chat-format scan validation: ranks [25,29] ahead of [12,16], narrowly
+- [ ] Read the full chat-format scan (`~/forge/runs/damage-scan/scan-4b-chat.log`, Altra)
+- [ ] Board v2: Qwen3.8-27B IQ3_M on the 5080 (running), against the 35B MoE's 0.925
+- [ ] Chat-distill on the full `wide` set when the 4B's answers are complete; then with the
+      27B's answers (`distill/vgen.py`, ~10 h rented)
+- [ ] Thinking mode: measure looping (cap-hit rate) of base vs slice vs repair, thinking on
+- [x] Thinking-mode check (2026-11-15, §0j.17): repairs carry over, on finished answers
 - [ ] Surgery-tax control (§0h, never run): uncut base + QLoRA vs drop2 + repair + QLoRA on
       the triage SFT, same budget
 
