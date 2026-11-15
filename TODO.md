@@ -173,12 +173,13 @@ Fixes + fired experiments recorded in design §0j.
 
 - [x] 4B damage scan (2026-11-14, §0j.15): cheap layers are 12–17; [12,16] costs 0.086 KLD vs
       0.233 for [25,29]; drop-4 [12,13,15,16] costs 0.198; full-attention 15 and 11 are cheap
-- [ ] Board v2 on unrepaired [12,16] and [12,13,15,16] (`scripts/qwen35-4b/board-scan.sh`,
-      queued on the 5080). If [12,16] beats unrep-2529, move the repair arms to it
+- [x] Board v2 on the scan picks (2026-11-14): [12,16] 0.763 and [12,13,15,16] 0.434 against
+      0.818 for [25,29]. Raw-text KLD does not predict the board; the arms stay on [25,29]
+- [ ] Scan on chat-format text (code and maths answers), per kind, before trusting any pick
 - [ ] 27B damage scan on the Altra (`~/forge/runs/damage-scan/scan-27b.log`, Q8_0, greedy 6):
       do the measured picks beat the cosine 27B picks unrepaired?
-- [ ] `STAGE=prep bash scripts/qwen35-4b/repair-local.sh` on the 5080: bridge, its KLD floor,
-      chat KLD rows for cut / bridge / 2529-distill, hidden-loss trainer calibration
+- [x] Prep stage (2026-11-14): the bridge is not a repair at [25,29] (chat KLD 0.225 → 0.221);
+      2529-distill reads 0.153; hidden-loss trainer 1,393 tok/s, 11.9 GiB
 - [ ] `STAGE=hid` arm (and `ARM=bridge-hid`): does the hidden-state term beat logit KL alone
       on chat KLD + top-1?
 - [ ] Cloud session 2 (`cloud/README.md`): 27B teacher throughput + pilot, full-weight

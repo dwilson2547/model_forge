@@ -1408,11 +1408,37 @@ cheapest single drops).** KLD is the mean of the fineweb and code means.
   ~0.2.
 - **Damage is mildly super-additive in this range.** The singles for [12,13,15,16] sum to
   0.179 and the set measures 0.198; [25,29]'s singles sum to 0.212 and the pair measures 0.233.
-- **What this does not show:** raw-text KLD is not the board. Board v2 on unrepaired [12,16]
-  and [12,13,15,16] is queued on the 5080 (`scripts/qwen35-4b/board-scan.sh`, recipes
-  `qwen35-4b-drop{2,4}-scan-*.yaml`); until it lands, "the scan picks are better slices" is
-  ⚠ unverified on tasks. If it holds, every repair arm below should start from [12,16], and
-  the repair scripts' `--dropped 25 29` / layers 24–28 change with it.
+- **The board says the opposite (2026-11-14, `scripts/qwen35-4b/board-scan.sh`).** Raw-text
+  KLD does not predict task damage, and the scan's picks are worse slices:
+
+  | Unrepaired slice | Composite | HumanEval | MBPP | GSM8K | IFEval (limit hits) | Needle |
+  |---|---:|---:|---:|---:|---:|---:|
+  | [25,29] | 0.818 | 0.701 | 0.690 | 0.875 | 0.840 (14) | 0.983 |
+  | [12,16] | 0.763 | 0.604 | 0.640 | 0.865 | 0.771 (34) | 0.933 |
+  | [12,13,15,16] | 0.434 | 0.238 | 0.370 | 0.345 | 0.515 (121) | 0.700 |
+
+  Paired against [25,29], [12,16] loses 33 HumanEval items and gains 17, and loses 41 IFEval
+  items and gains 22. 23 of its 108 worse items hit the token limit; its mean IFEval answer is
+  886 tokens against 566. With limit-hit items removed from both, it still trails on HumanEval
+  (0.640 vs 0.727) and IFEval (0.809 vs 0.871). The drop-4 collapses: its raw-text KLD (0.198)
+  was below [25,29]'s.
+- **Chat KLD, overall mean, also ranks them the wrong way round**; by kind it doesn't.
+  Held-out teacher answers (134 answers, 64,350 tokens, `results/chatkld.jsonl`):
+
+  | Slice | KLD | top-1 | code KLD / top-1 | mathmore | general | wildchat |
+  |---|---:|---:|---:|---:|---:|---:|
+  | [25,29] | 0.225 | 86.1% | 0.067 / 95.3% | 0.109 / 92.4% | 0.235 / 87.7% | 0.289 / 82.8% |
+  | [12,16] | 0.182 | 86.0% | 0.086 / 93.9% | 0.138 / 91.3% | 0.132 / 89.5% | 0.203 / 83.8% |
+  | [12,13,15,16] | 0.412 | 79.2% | | | | |
+
+  [12,16] is closer to the base on open-ended prose (general, wildchat), which carries most
+  of the tokens, and further from it on code and maths, which is what the board grades. The
+  per-kind samples are small ⚠ unverified as a ranking tool until the full holdout exists.
+- **Consequences.** (1) The repair arms stay on [25,29]. (2) A scan has to measure on text
+  like the tasks: per-kind chat-format KLD on code and maths, not fineweb. (3) Chat KLD is
+  read per kind, never as one mean. (4) "Late layers are the cheap ones" is the cosine
+  scorer's claim and the board supports it over the raw-text scan; whether a chat-format scan
+  finds something better than [25,29] is open.
 
 The 27B scan (Q8_0, 6 rounds, later rounds over the 16 cheapest single drops) restarted
 2026-11-14 18:40 after a killed run left a truncated reference file (references are now
@@ -1426,12 +1452,19 @@ the missing layer's effect still missing on held-out windows. A per-token linear
 tokens, so how much it recovers on the linear-attention blocks is the open question; the
 `unexplained_stream` figure is the ceiling for any linear map at that cut.
 
+Result at [25,29] (2026-11-14): the bridge leaves 95% and 87% of the two dropped layers'
+effect unexplained on held-out windows. Raw-text KLD moves from 0.300 / 0.149 (fineweb / code)
+to 0.259 / 0.093; chat KLD from 0.225 to 0.221, top-1 86.1% to 86.6%. Free, and not a repair.
+
 **3. Hidden-state targets** (`recover_gpu.py --hidden-loss W --dropped ...`). The teacher is
 the slice plus two layers, so every layer boundary past the first cut has an exact target.
 The loss adds W × the relative squared error between student and teacher hidden states there,
 over every position (prompt included), on top of the logit KL. `--train-layers` restricts
 training to the layers around the cuts (LoRA or `--full`), so capacity can be concentrated:
 for [25,29] the neighbours are student layers 24–28.
+
+Calibration on the 5080 (2026-11-14, QLoRA r16, batch 2, accum 2, ctx 512): 1,393 tok/s, peak
+11.9 GiB; both terms fall over 72 optimizer steps. The `hid` arm started 2026-11-14 21:50.
 
 **The metric** (`distill/chatkld.py`). KL(base ‖ student) and top-1 agreement per answer token
 on teacher answers held out of training (`distill.is_holdout`, 781 of the 41k `wide` ids;
