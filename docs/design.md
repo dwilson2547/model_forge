@@ -1598,6 +1598,22 @@ Repairs trained with no thinking text close the same share of the gap on thinkin
 with thinking on (8 with it off), so only finished answers are scored and looping itself is
 not measured; and the two rows cover different prompts.
 
+**Thinking-on cap hits** (the looping the check above cannot see). Each model answered the
+same 150 prompts through llama-server (f16, 4 slots, T 0.6, cap 4,096); count that hit the cap:
+
+| | thinking off | thinking on |
+|---|---:|---:|
+| base | 8 | 65 |
+| unrepaired [25,29] | 18 | 68 |
+| 2529-distill | 12 | 47 |
+| 2529-chatdistill-p14k | 6 | 49 |
+
+The cut more than doubles runaways with thinking off (8 → 18) and both repairs bring that
+back (chat-distill to 6). With thinking on, the repaired models hit the cap less often than
+the base itself (47 and 49 against 65). One sampled run each at n=150, so differences of a
+few are noise; 65 vs 47 is about three binomial standard errors. Not checked: whether the
+repaired models think less or just finish sooner.
+
 **Chat-format scan, validation** (Altra, `distill/chattext.py` corpus of code, codemore and
 mathmore answers, 16 chunks): [25,29] 0.145, [12,16] 0.153, [12,13,15,16] 0.325. The order is
 the board's (0.818, 0.763, 0.434); raw text had it reversed. The gap between the first two is
@@ -1611,6 +1627,21 @@ f16 (0.890), the gain almost all on code.
 0.965, IFEval 0.884, needle 1.000), 1 slot, 76 min, 4 limit hits, ~51 tok/s, 14.8 GiB used.
 The two are level on the board (0.927 vs 0.925, inside the per-tier standard errors); the MoE
 generated the board in a third of the time and uses 0.5 GiB more.
+
+**Qwen3.6-35B-A3B UD-Q4_K_M (20.6 GiB) split GPU / system RAM** (`--n-cpu-moe N` keeps the
+expert weights of the first N layers on the CPU; 32k context, two prompts each):
+
+| N | VRAM | tok/s |
+|---:|---:|---:|
+| 8 | 15.4 GiB | 12 |
+| 14 | 15.8 GiB | 24 |
+| 20 | 13.3 GiB | 18 |
+| 28 | 9.6 GiB | 14 |
+| all | 4.0 GiB | 10 |
+
+Best case 24 tok/s, against 109–154 for IQ3_S fully on the card. N=8 is slower than N=14 at
+the same VRAM, which reads as the card overflowing into shared memory ⚠ unverified. Board v2
+at N=14 started 2026-11-15 10:10 (`qwen36-35b-a3b-q4km-split14@5080`).
 
 **[13,28], the chat-format scan's pair, unrepaired**: board v2 0.816 against 0.818 for
 [25,29]. Paired: HumanEval +0.030 ± 0.040, MBPP +0.010 ± 0.046, GSM8K +0.015 ± 0.028, IFEval

@@ -193,7 +193,8 @@ Fixes + fired experiments recorded in design §0j.
 - [ ] Chat-format scan of the 27B (Altra, `scan-27b-chat.log`)
 - [ ] Chat-distill on the full `wide` set when the 4B's answers are complete; then with the
       27B's answers (`distill/vgen.py`, ~10 h rented)
-- [ ] Thinking mode: measure looping (cap-hit rate) of base vs slice vs repair, thinking on
+- [x] Thinking-on cap hits (2026-11-15, §0j.17): base 65/150, cut 68, repairs 47 and 49
+- [ ] Board v2 on the 35B MoE at Q4_K_M split (running): is Q4 worth 5x slower than IQ3_S?
 - [x] Thinking-mode check (2026-11-15, §0j.17): repairs carry over, on finished answers
 - [ ] Surgery-tax control (§0h, never run): uncut base + QLoRA vs drop2 + repair + QLoRA on
       the triage SFT, same budget
