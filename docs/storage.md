@@ -7,6 +7,7 @@ come from `surgery/paths.py`, and scripts use `${FORGE_ROOT:-~/forge}`.
 |---|---|---|
 | Repo | `ai/model-forge` | All code, recipes, cards, and the result ledgers in `results/`. No weights. |
 | Working | `~/forge/` on the Altra and the desktop | What is in use now. Local NVMe. |
+| Altra data volumes | `/mnt/data1`, `/mnt/data2` (3.6 TB ext4 each, one Intel U.2 drive each, set up 2026-11-15 by `scripts/storage/ampere-data-drives.sh`) | `~/forge` on the Altra is a symlink to `/mnt/data1/forge` (moved 2026-11-15, checksum-verified; 653 GB). `/mnt/data2` is empty. |
 | Share | `/mnt/models/forge/` (CIFS share, spinning disk; mounted on the Altra and the desktop) | A mirror of `~/forge/`: the same relative path as on both machines. |
 
 ## The tree
@@ -42,11 +43,12 @@ share-sync.sh pull  <subpath>    # bring it back
 
 - `clean` compares size and mtime. `CHECKSUM=1` compares content, slowly.
 - The damage scan's scratch files and `*.part` files are skipped.
-- From the desktop the script goes through `ssh ampere`: the desktop's mount of the share is
-  not writable by the user ⚠ unverified (read from the mount options, not tried).
+- The desktop's mount of the share is writable by the user (pushed directly 2026-11-15). Where
+  a mount is not writable the script goes through `ssh ampere`.
 - A ledger with the same name on both machines must hold the same rows, or the later push
   replaces the earlier one. `bench.jsonl` was the only such file and was merged 2026-11-14.
-- First full push from the Altra started 2026-11-14 (`~/forge/runs/_logs/share-push.log`).
+- First full push from the Altra started 2026-11-14 (`~/forge/runs/_logs/share-push.log`) and matched
+  on `check` 2026-11-15. First full push from the desktop: 2026-11-15.
 
 ```
 - **Families:** `qwen35-4b`, `qwen38-27b`. A new model gets its own family.
