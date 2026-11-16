@@ -1646,8 +1646,23 @@ expert weights of the first N layers on the CPU; 32k context, two prompts each):
 | all | 4.0 GiB | 10 |
 
 Best case 24 tok/s, against 109–154 for IQ3_S fully on the card. N=8 is slower than N=14 at
-the same VRAM, which reads as the card overflowing into shared memory ⚠ unverified. Board v2
-at N=14 started 2026-11-15 10:10 (`qwen36-35b-a3b-q4km-split14@5080`).
+the same VRAM, which reads as the card overflowing into shared memory ⚠ unverified.
+
+Board v2 at Q4_K_M (`qwen36-35b-a3b-q4km-split14@5080`, finished 2026-11-15; the run was
+paused twice and its last 187 items ran at N=20 after N=14 ran out of VRAM headroom, which
+changes speed, not answers):
+
+| tier | IQ3_S | Q4_K_M | Q4 − IQ3 | ± se | worse / better |
+|---|---:|---:|---:|---:|---:|
+| humaneval | 0.951 | 0.951 | +0.000 | 0.017 | 4 / 4 |
+| mbpp | 0.820 | 0.850 | +0.030 | 0.026 | 2 / 5 |
+| gsm8k | 0.960 | 0.970 | +0.010 | 0.007 | 0 / 2 |
+| ifeval | 0.896 | 0.896 | 0.000 | 0.011 | 5 / 8 |
+| needle | 1.000 | 1.000 | 0.000 | 0.000 | 0 / 0 |
+
+Composite 0.933 against 0.925. No tier differs by two standard errors, so on this board Q4
+buys nothing measurable for a 5x or larger loss in speed: IQ3_S fully on the card is the
+5080 configuration for this model.
 
 **[13,28], the chat-format scan's pair, unrepaired**: board v2 0.816 against 0.818 for
 [25,29]. Paired: HumanEval +0.030 ± 0.040, MBPP +0.010 ± 0.046, GSM8K +0.015 ± 0.028, IFEval
