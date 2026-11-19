@@ -236,6 +236,10 @@ def main():
     ap.add_argument("--resume", default="",
                     help="checkpoint dir (out/ckpt/stepN) to continue the same run from: "
                          "restores weights/adapter, optimizer, scheduler, step and shuffle order")
+    ap.add_argument("--init-lora", default="",
+                    help="LoRA mode: start a NEW run from these adapter weights (a PEFT "
+                         "adapter_model.safetensors); modules it lacks keep the default init. "
+                         "Unlike --resume, optimizer, schedule and step start fresh")
     ap.add_argument("--val-frac", type=float, default=0.0,
                     help="hold out this fraction of examples (seeded) for held-out loss. "
                          "Raw mode windows are contiguous ctx chunks, so neighbours of a val "
@@ -371,6 +375,16 @@ def main():
             if bad:
                 raise SystemExit(f"--resume: adapter keys did not load: {bad[:3]}…")
             print(f"[recover-gpu] resumed adapter weights from {resume}", flush=True)
+        elif args.init_lora:
+            from peft.utils import set_peft_model_state_dict
+            from safetensors.torch import load_file
+            sd = load_file(args.init_lora)
+            res = set_peft_model_state_dict(model, sd, adapter_name="repair")
+            bad = [k for k in getattr(res, "unexpected_keys", []) if "lora" in k]
+            if bad:
+                raise SystemExit(f"--init-lora: adapter keys did not load: {bad[:3]}…")
+            print(f"[recover-gpu] initial adapter weights from {args.init_lora} "
+                  f"({len(sd)} tensors)", flush=True)
         model.print_trainable_parameters()
     for name, m in model.named_modules():
         if hasattr(m, "in_proj_qkv"):
