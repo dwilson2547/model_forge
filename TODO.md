@@ -146,8 +146,10 @@ Fixes + fired experiments recorded in design §0j.
 - [x] D2 tier: board v2 (`bench/board2.py`, 694 items: HumanEval, MBPP, GSM8K, IFEval, needle;
       greedy, thinking off). First lineup 2026-11-14, design §0j.13: wound -0.072 composite,
       raw-text repairs recover little of it
-- [ ] Chat-distill [25,29] on the `wide` answers (41k, being generated on the shared queue,
-      `docs/datasets.md`); train ctx long enough for the needle range, then board v2
+- [ ] **Next here:** chat-distill [25,29] on the `wide` answers. Ready since 2026-11-16:
+      `~/forge/data/distill/qwen35-4b-q4.wide.jsonl`, 38,704 kept of 41,000 (2,296 dropped at the
+      length cap, mostly mathmore; gold-checked 3,570/4,000), `docs/datasets.md`. Train ctx long
+      enough for the needle range, then board v2
 - [ ] Check Q4-vs-f16 teacher drift on a few hundred `wide` prompts before trusting the Q4 text
 - [ ] Data selection (`distill/curate.py`, docs/datasets.md "Curating"): embed + score the full `wide`
       answers against the [25,29] slice, then a fixed-budget comparison (random / balanced / need,
